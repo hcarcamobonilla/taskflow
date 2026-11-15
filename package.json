@@ -13,6 +13,7 @@
     "dev": "node --env-file=.env --watch src/server.js",
     "db:setup": "node --env-file=.env scripts/db-setup.js",
     "db:seed": "node --env-file=.env scripts/db-setup.js --seed",
+    "build:demo": "node scripts/build-demo.js",
     "test": "NODE_ENV=test node --env-file=.env --test --test-concurrency=1 \"tests/**/*.test.js\""
   },
   "dependencies": {

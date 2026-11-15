@@ -14,7 +14,9 @@ npm-debug.log*
 # Pruebas y builds
 coverage/
 dist/
+dist-demo/
 build/
+.vercel
 
 # Sistema y editor
 .DS_Store
@@ -25,3 +27,4 @@ Thumbs.db
 CLAUDE.md
 GUIA_TECNICA.md
 INFORME_DESPLIEGUE_VERCEL.md
+DESPLIEGUE_VERCEL.md
