@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TaskFlow — Seguimiento de tareas</title>
+  <link rel="stylesheet" href="css/styles.css">
+  <script type="module" src="js/main.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#tasks-heading">Saltar a la lista de tareas</a>
+
+  <header class="site-header">
+    <h1>TaskFlow</h1>
+    <p>Seguimiento de tareas</p>
+  </header>
+
+  <main>
+    <!-- Mensajes de éxito y error: los lectores de pantalla los anuncian al cambiar. -->
+    <p id="message" class="message" role="status" aria-live="polite" hidden></p>
+
+    <section aria-labelledby="dashboard-heading">
+      <h2 id="dashboard-heading">Resumen</h2>
+      <dl class="dashboard">
+        <div class="stat">
+          <dt>Total</dt>
+          <dd id="count-total">–</dd>
+        </div>
+        <div class="stat stat-pending">
+          <dt>Pendientes</dt>
+          <dd id="count-pending">–</dd>
+        </div>
+        <div class="stat stat-in_progress">
+          <dt>En progreso</dt>
+          <dd id="count-in_progress">–</dd>
+        </div>
+        <div class="stat stat-completed">
+          <dt>Completadas</dt>
+          <dd id="count-completed">–</dd>
+        </div>
+      </dl>
+    </section>
+
+    <section class="panel" aria-labelledby="form-heading">
+      <h2 id="form-heading">Nueva tarea</h2>
+      <form id="task-form" novalidate>
+        <div class="field field-wide">
+          <label for="task-title">Título <span aria-hidden="true">*</span></label>
+          <input type="text" id="task-title" name="title" required maxlength="150"
+                 autocomplete="off" aria-describedby="error-title">
+          <p class="field-error" id="error-title"></p>
+        </div>
+
+        <div class="field field-wide">
+          <label for="task-description">Descripción (opcional)</label>
+          <textarea id="task-description" name="description" rows="3" maxlength="2000"
+                    aria-describedby="error-description"></textarea>
+          <p class="field-error" id="error-description"></p>
+        </div>
+
+        <div class="field">
+          <label for="task-status">Estado</label>
+          <select id="task-status" name="status" aria-describedby="error-status">
+            <option value="pending">Pendiente</option>
+            <option value="in_progress">En progreso</option>
+            <option value="completed">Completada</option>
+          </select>
+          <p class="field-error" id="error-status"></p>
+        </div>
+
+        <div class="field">
+          <label for="task-priority">Prioridad</label>
+          <select id="task-priority" name="priority" aria-describedby="error-priority">
+            <option value="low">Baja</option>
+            <option value="medium" selected>Media</option>
+            <option value="high">Alta</option>
+          </select>
+          <p class="field-error" id="error-priority"></p>
+        </div>
+
+        <div class="field">
+          <label for="task-due-date">Fecha límite (opcional)</label>
+          <input type="date" id="task-due-date" name="dueDate" aria-describedby="error-dueDate">
+          <p class="field-error" id="error-dueDate"></p>
+        </div>
+
+        <div class="form-actions field-wide">
+          <button type="submit" id="submit-button" class="button button-primary">Crear tarea</button>
+          <button type="button" id="cancel-edit-button" class="button" hidden>Cancelar edición</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="panel" aria-labelledby="tasks-heading">
+      <h2 id="tasks-heading" tabindex="-1">Tareas</h2>
+
+      <form id="filters-form" class="filters" role="search" aria-label="Filtrar y ordenar tareas">
+        <div class="field">
+          <label for="filter-q">Buscar</label>
+          <input type="search" id="filter-q" name="q" maxlength="100" placeholder="Título o descripción">
+        </div>
+        <div class="field">
+          <label for="filter-status">Estado</label>
+          <select id="filter-status" name="status">
+            <option value="">Todos</option>
+            <option value="pending">Pendiente</option>
+            <option value="in_progress">En progreso</option>
+            <option value="completed">Completada</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="filter-priority">Prioridad</label>
+          <select id="filter-priority" name="priority">
+            <option value="">Todas</option>
+            <option value="high">Alta</option>
+            <option value="medium">Media</option>
+            <option value="low">Baja</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="filter-sort">Ordenar por</label>
+          <select id="filter-sort" name="sort">
+            <option value="created_at:desc">Más recientes primero</option>
+            <option value="created_at:asc">Más antiguas primero</option>
+            <option value="due_date:asc">Fecha límite: próximas primero</option>
+            <option value="due_date:desc">Fecha límite: lejanas primero</option>
+            <option value="priority:desc">Prioridad: alta primero</option>
+            <option value="priority:asc">Prioridad: baja primero</option>
+          </select>
+        </div>
+        <div class="field field-button">
+          <button type="reset" class="button">Limpiar filtros</button>
+        </div>
+      </form>
+
+      <p id="list-status" class="list-status" role="status" aria-live="polite">Cargando tareas…</p>
+      <ul id="task-list" class="task-list" aria-labelledby="tasks-heading"></ul>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p>TaskFlow · Node.js, Express, PostgreSQL y JavaScript vanilla</p>
+  </footer>
+</body>
+</html>
