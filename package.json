@@ -13,7 +13,7 @@
     "dev": "node --env-file=.env --watch src/server.js",
     "db:setup": "node --env-file=.env scripts/db-setup.js",
     "db:seed": "node --env-file=.env scripts/db-setup.js --seed",
-    "test": "node --env-file=.env --test --test-concurrency=1 \"tests/**/*.test.js\""
+    "test": "NODE_ENV=test node --env-file=.env --test --test-concurrency=1 \"tests/**/*.test.js\""
   },
   "license": "MIT",
   "dependencies": {
