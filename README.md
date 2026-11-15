@@ -1,9 +1,23 @@
 # TaskFlow — Seguimiento de tareas
 
 Aplicación web full stack para gestionar tareas: crear, consultar, editar, eliminar, filtrar,
-buscar y ordenar, con un pequeño panel de recuentos por estado. Los datos se guardan en
-PostgreSQL. Es una aplicación local de un solo usuario (sin autenticación), pensada como
-proyecto de portafolio.
+buscar y ordenar, con un pequeño panel de recuentos por estado. Es un proyecto de portafolio
+de un solo usuario, sin cuentas ni autenticación.
+
+## Dos versiones, un mismo código
+
+El mismo frontend funciona de dos maneras. Lo único que cambia es dónde se guardan las tareas:
+
+| | Versión local (full stack) | Demo web (modo invitado) |
+|---|---|---|
+| Para qué sirve | Desarrollo y uso real en tu equipo | Probar la aplicación desde una URL pública |
+| Dónde se guardan las tareas | PostgreSQL, de forma permanente | `sessionStorage` del navegador, de forma temporal |
+| Backend | Node.js + Express (API REST) | Ninguno: es un sitio estático |
+| Cómo se inicia | `npm start` | `npm run build:demo` y publicar la carpeta `dist-demo/` |
+| Pantalla inicial | Directamente la aplicación | Bienvenida con el botón "Entrar como invitado" |
+| Quién ve las tareas | Quien use esa base de datos | Solo el visitante, en su propia pestaña |
+
+La interfaz, los formularios y los estilos son los mismos archivos en ambas versiones.
 
 ## Funcionalidades
 
@@ -21,8 +35,10 @@ proyecto de portafolio.
 | Capa | Tecnología |
 |------|------------|
 | Frontend | HTML5 semántico, CSS3 responsive, JavaScript vanilla (módulos ES) y Fetch API |
-| Backend | Node.js 26 (LTS) y Express 5 |
-| Base de datos | PostgreSQL 18 con la biblioteca `pg` (SQL parametrizado, sin ORM) |
+| Backend (versión local) | Node.js 26 (LTS) y Express 5 |
+| Base de datos (versión local) | PostgreSQL 18 con la biblioteca `pg` (SQL parametrizado, sin ORM) |
+| Almacenamiento de la demo | API Web Storage del navegador (`sessionStorage`) |
+| Build de la demo | Script de Node con módulos nativos (`fs`, `path`), sin bundler |
 | Pruebas | `node:test` (ejecutor nativo de Node) y `supertest` |
 
 Dependencias de npm: solo `express` y `pg` en producción, y `supertest` para pruebas.
@@ -30,9 +46,19 @@ El archivo `.env` se carga con la opción nativa `node --env-file` (no se usa `d
 
 ## Arquitectura
 
+La interfaz no sabe dónde se guardan las tareas: habla con un "almacén" que tiene dos
+implementaciones (adaptadores) con las mismas funciones.
+
 ```
-Navegador (public/)  ──HTTP/JSON──►  Express (src/)  ──SQL──►  PostgreSQL
+                       ┌─ apiStore.js ──HTTP/JSON──► Express (src/) ──SQL──► PostgreSQL   (versión local)
+main.js + ui.js ──► almacén
+                       └─ sessionStore.js ──► sessionStorage del navegador                (demo web)
 ```
+
+El adaptador se elige en `public/js/config.js` (`'api'` o `'session'`). El archivo fuente vale
+`'api'`; el build de la demo genera una copia que vale `'session'`. No se detecta el entorno
+automáticamente y, si la API local falla, la aplicación muestra el error: nunca cambia sola al
+modo invitado.
 
 ```
 seguimiento_tareas/
@@ -40,9 +66,16 @@ seguimiento_tareas/
 │   ├── index.html
 │   ├── css/styles.css
 │   └── js/
-│       ├── api.js          Peticiones a la API con fetch
+│       ├── config.js       Modo de almacenamiento: 'api' o 'session'
+│       ├── main.js         Eventos y coordinación
 │       ├── ui.js           Lectura y escritura del DOM
-│       └── main.js         Eventos y coordinación
+│       ├── guest.js        Entrada y salida del modo invitado
+│       └── store/          Almacén de tareas
+│           ├── index.js        Carga el adaptador elegido
+│           ├── apiStore.js     Adaptador HTTP (Fetch → API REST)
+│           ├── sessionStore.js Adaptador de sessionStorage
+│           ├── taskRules.js    Validación, filtros y orden para la demo
+│           └── StoreError.js   Error común a ambos adaptadores
 ├── src/                    Backend
 │   ├── server.js           Arranque del servidor
 │   ├── app.js              Configuración de Express
@@ -57,11 +90,14 @@ seguimiento_tareas/
 ├── db/
 │   ├── schema.sql          Tabla, restricciones, índices y trigger
 │   └── seed.sql            Datos de demostración
-├── scripts/db-setup.js     Crea las bases de datos y aplica el esquema
+├── scripts/
+│   ├── db-setup.js         Crea las bases de datos y aplica el esquema
+│   └── build-demo.js       Genera la demo estática en dist-demo/
+├── vercel.json             Configuración del despliegue de la demo
 └── tests/                  Pruebas unitarias y de integración
 ```
 
-## Requisitos previos
+## Requisitos previos (versión local)
 
 - Windows 11 con WSL2 y Ubuntu.
 - VS Code con la extensión **WSL** (opcional, pero es el entorno usado).
@@ -71,7 +107,10 @@ seguimiento_tareas/
 
 Todo se instala y se ejecuta **dentro de Ubuntu (WSL)**, no en Windows.
 
-## Instalación paso a paso
+La demo web no necesita nada de esto para usarse: basta un navegador. Para generarla solo
+hace falta Node.js (ver "Demo web").
+
+## Instalación paso a paso (versión local)
 
 ### 1. WSL2 y VS Code
 
@@ -170,6 +209,7 @@ inicia el servicio: `sudo service postgresql start`.
 | `npm run dev` | Arranca el servidor y lo reinicia al guardar cambios (`node --watch`) |
 | `npm run db:setup` | Crea las bases `taskflow` y `taskflow_test` si no existen y aplica `db/schema.sql` |
 | `npm run db:seed` | Lo mismo y además carga los datos demo (solo si la tabla está vacía) |
+| `npm run build:demo` | Genera la demo estática (modo invitado) en `dist-demo/` |
 | `npm test` | Ejecuta todas las pruebas contra la base `taskflow_test` |
 
 Los scripts de base de datos son idempotentes: pueden repetirse sin borrar datos.
@@ -184,7 +224,65 @@ Los scripts de base de datos son idempotentes: pueden repetirse sin borrar datos
 - **Filtrar, buscar y ordenar**: usa los controles sobre la lista. "Limpiar filtros" los restablece.
 - El **resumen** superior muestra siempre los recuentos de todas las tareas, aunque haya filtros.
 
-## API REST
+## Demo web (modo invitado)
+
+### Cómo funciona para el visitante
+
+1. Ve la pantalla "Bienvenido a TaskFlow" y pulsa **Entrar como invitado**. No hay registro,
+   correo ni contraseña, y no se crea ninguna cuenta ni sesión en un servidor.
+2. Usa la aplicación con todas sus funciones: crear, editar, eliminar, estados, prioridades,
+   fechas, búsqueda, filtros, orden y resumen.
+3. Sus tareas se guardan solo en su navegador. Otros visitantes no las ven.
+4. Con **Salir y borrar mis datos** (pide confirmación) se eliminan sus tareas y vuelve a la
+   pantalla de bienvenida.
+
+### Generar la demo
+
+```bash
+npm run build:demo
+```
+
+Crea la carpeta `dist-demo/` copiando `public/`, con dos diferencias: `js/config.js` queda en
+modo `'session'` y no se incluye el adaptador de la API. No hay una segunda copia del frontend
+que mantener: `dist-demo/` se regenera siempre desde `public/` y no se sube al repositorio.
+
+Para probarla en tu equipo con cualquier servidor de archivos estáticos:
+
+```bash
+cd dist-demo && python3 -m http.server 8080
+```
+
+y abre <http://localhost:8080>. No hacen falta Express ni PostgreSQL.
+
+### Publicarla en Vercel
+
+La demo es un sitio estático. El archivo `vercel.json` ya deja el proyecto configurado:
+
+| Ajuste | Valor |
+|--------|-------|
+| Framework Preset | Other |
+| Build Command | `npm run build:demo` |
+| Output Directory | `dist-demo` |
+| Root Directory | Raíz del repositorio |
+| Variables de entorno | Ninguna |
+
+No se despliega el backend ni se necesita base de datos, y no hay secretos que configurar.
+
+### Qué significa "temporal": límites de sessionStorage
+
+- Los datos **sobreviven a una recarga** de la página.
+- Pertenecen a **una pestaña**. Una pestaña nueva empieza vacía; una pestaña duplicada empieza
+  con una copia de los datos y luego cada una sigue por separado.
+- Normalmente se eliminan al cerrar la pestaña, pero **no está garantizado**: si el navegador
+  restaura la sesión ("reabrir pestaña cerrada", "continuar donde lo dejaste"), pueden volver.
+- La única forma segura de borrarlos desde la aplicación es **Salir y borrar mis datos**.
+- No se sincronizan entre dispositivos ni navegadores, y no hay copia de seguridad.
+- El espacio es limitado (unos pocos MB por sitio); si se agota, la aplicación avisa.
+- Si el navegador bloquea el almacenamiento (por ejemplo, por una configuración de
+  privacidad estricta), la aplicación lo explica y no entra al modo invitado.
+- No guardes información sensible: cualquiera que use ese mismo navegador podría verla.
+
+## API REST (versión local)
 
 Base: `/api/tasks`. Todas las respuestas son JSON.
 
@@ -260,7 +358,7 @@ Códigos de error: `400` entrada no válida o JSON malformado, `404` tarea o rut
 npm test
 ```
 
-Requiere PostgreSQL en marcha y haber ejecutado `npm run db:setup`. Hay 42 pruebas:
+Requiere PostgreSQL en marcha y haber ejecutado `npm run db:setup`. Hay 76 pruebas:
 
 - `tests/validator.test.js`: pruebas unitarias de validación (sin base de datos).
 - `tests/tasks.api.test.js`: pruebas de integración reales. Envían peticiones HTTP a la
@@ -270,16 +368,28 @@ Requiere PostgreSQL en marcha y haber ejecutado `npm run db:setup`. Hay 42 prueb
 - `tests/db-down.test.js`: apunta la conexión a un puerto sin servicio para comprobar que
   la API responde `503` sin revelar detalles internos.
 - `tests/health.test.js`: endpoint de salud.
+- `tests/session-store.test.js`: ejecuta en Node el adaptador real de `sessionStorage` con un
+  almacenamiento simulado. Cubre CRUD, validación, filtros, orden, persistencia, salida del
+  modo invitado y errores (almacenamiento bloqueado, dañado o lleno).
+- `tests/store-parity.test.js`: aplica las mismas operaciones a la API con PostgreSQL y al
+  adaptador de `sessionStorage`, y exige resultados idénticos (datos, orden, recuentos y
+  mensajes de error).
+- `tests/build-demo.test.js`: ejecuta el build y comprueba que `dist-demo/` contiene solo el
+  frontend, en modo `'session'`, sin llamadas a la API ni archivos del backend.
 
 Las pruebas no tocan la base de desarrollo `taskflow`.
 
 ## Limitaciones conocidas
 
-- Un solo usuario y sin autenticación: no debe exponerse a Internet tal como está.
+- Versión local: un solo usuario y sin autenticación. El backend no debe exponerse a Internet
+  tal como está; lo que se publica es la demo estática, que no tiene backend.
+- Demo web: los datos son temporales y locales a cada pestaña (ver "Límites de sessionStorage").
+- Las reglas de validación, filtros y orden existen dos veces: en el servidor y en
+  `public/js/store/taskRules.js`. La prueba de paridad avisa si dejan de coincidir.
 - Sin paginación: la lista devuelve todas las tareas que cumplen los filtros.
-- No hay pruebas automatizadas de interfaz en un navegador. Durante el desarrollo el frontend
-  se verificó de forma puntual ejecutando sus módulos sobre un DOM simulado (jsdom) contra el
-  servidor real; esa comprobación no forma parte del repositorio.
+- No hay pruebas automatizadas de interfaz en un navegador real. Durante el desarrollo los dos
+  modos se verificaron ejecutando sus módulos sobre un DOM simulado (jsdom); esa comprobación
+  no forma parte del repositorio.
 - La búsqueda usa `ILIKE` (coincidencia de texto simple, sensible a tildes).
 - La marca "vencida" se calcula con la fecha del navegador.
 - Sin despliegue ni configuración de producción (HTTPS, logs, copias de seguridad).
