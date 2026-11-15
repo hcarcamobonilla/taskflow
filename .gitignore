@@ -20,3 +20,8 @@ build/
 .DS_Store
 Thumbs.db
 *.swp
+
+# Documentos personales de trabajo (no forman parte del proyecto publicado)
+CLAUDE.md
+GUIA_TECNICA.md
+INFORME_DESPLIEGUE_VERCEL.md

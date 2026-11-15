@@ -61,8 +61,6 @@ seguimiento_tareas/
 └── tests/                  Pruebas unitarias y de integración
 ```
 
-La explicación detallada está en [GUIA_TECNICA.md](GUIA_TECNICA.md).
-
 ## Requisitos previos
 
 - Windows 11 con WSL2 y Ubuntu.
@@ -215,7 +213,7 @@ Cuerpo para `POST` y `PUT`:
 ```json
 {
   "title": "Preparar entrevista",
-  "description": "Repasar la guía técnica",
+  "description": "Repasar los endpoints de la API",
   "status": "pending",
   "priority": "high",
   "dueDate": "2026-12-01"
