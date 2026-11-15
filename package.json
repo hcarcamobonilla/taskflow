@@ -15,7 +15,6 @@
     "db:seed": "node --env-file=.env scripts/db-setup.js --seed",
     "test": "NODE_ENV=test node --env-file=.env --test --test-concurrency=1 \"tests/**/*.test.js\""
   },
-  "license": "MIT",
   "dependencies": {
     "express": "^5.3.0",
     "pg": "^8.23.1"
