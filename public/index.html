@@ -8,7 +8,7 @@
   <script type="module" src="js/main.js"></script>
 </head>
 <body>
-  <a class="skip-link" href="#tasks-heading">Saltar a la lista de tareas</a>
+  <a class="skip-link" id="skip-link" href="#tasks-heading" hidden>Saltar a la lista de tareas</a>
 
   <header class="site-header">
     <h1>TaskFlow</h1>
@@ -16,8 +16,29 @@
   </header>
 
   <main>
+    <noscript>
+      <p class="panel">TaskFlow necesita JavaScript para funcionar. Actívalo en tu navegador y recarga la página.</p>
+    </noscript>
+
+    <!-- Pantalla de bienvenida: solo se muestra en la demo web (modo invitado). -->
+    <section id="welcome" class="panel welcome" aria-labelledby="welcome-heading" hidden>
+      <h2 id="welcome-heading" tabindex="-1">Bienvenido a TaskFlow</h2>
+      <p>Organiza tus tareas y explora las funcionalidades de la aplicación.</p>
+      <button type="button" id="enter-guest-button" class="button button-primary">Entrar como invitado</button>
+      <p class="welcome-notice">Tus tareas se guardarán temporalmente en este navegador y podrás eliminarlas al salir.</p>
+      <p id="welcome-error" class="message message-error" role="alert" hidden></p>
+    </section>
+
+    <!-- Aplicación: main.js la muestra cuando sabe qué modo de almacenamiento se usa. -->
+    <div id="app" class="app" hidden>
     <!-- Mensajes de éxito y error: los lectores de pantalla los anuncian al cambiar. -->
     <p id="message" class="message" role="status" aria-live="polite" hidden></p>
+
+    <!-- Barra del modo invitado: solo visible en la demo web. -->
+    <aside id="guest-bar" class="guest-bar" aria-label="Modo invitado" hidden>
+      <p>Modo invitado: tus tareas se guardan temporalmente en este navegador.</p>
+      <button type="button" id="exit-guest-button" class="button button-danger">Salir y borrar mis datos</button>
+    </aside>
 
     <section aria-labelledby="dashboard-heading">
       <h2 id="dashboard-heading">Resumen</h2>
@@ -136,6 +157,7 @@
       <p id="list-status" class="list-status" role="status" aria-live="polite">Cargando tareas…</p>
       <ul id="task-list" class="task-list" aria-labelledby="tasks-heading"></ul>
     </section>
+    </div>
   </main>
 
   <footer class="site-footer">

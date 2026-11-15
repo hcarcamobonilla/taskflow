@@ -1,4 +1,4 @@
-// Funciones que leen y modifican el DOM. No hacen peticiones a la API.
+// Funciones que leen y modifican el DOM. No saben dónde se guardan las tareas.
 // Los datos del usuario se escriben siempre con textContent (nunca innerHTML) para evitar XSS.
 
 export const STATUS_LABELS = {
@@ -32,6 +32,49 @@ function todayIso() {
   const month = String(now.getMonth() + 1).padStart(2, '0');
   const day = String(now.getDate()).padStart(2, '0');
   return `${now.getFullYear()}-${month}-${day}`;
+}
+
+/* ---------- Vistas: bienvenida y aplicación ---------- */
+
+// Muestra la aplicación. Con isGuest = true añade la barra del modo invitado.
+export function showApp({ isGuest }) {
+  $('welcome').hidden = true;
+  $('welcome-error').hidden = true;
+  $('guest-bar').hidden = !isGuest;
+  $('app').hidden = false;
+  $('skip-link').hidden = false;
+}
+
+export function showWelcome() {
+  $('app').hidden = true;
+  $('skip-link').hidden = true;
+  $('welcome').hidden = false;
+}
+
+export function showWelcomeError(text) {
+  const box = $('welcome-error');
+  box.textContent = text;
+  box.hidden = false;
+}
+
+export function focusWelcome() {
+  $('welcome-heading').focus();
+}
+
+export function focusGuestExit() {
+  $('exit-guest-button').focus();
+}
+
+// Deja la pantalla sin rastro de las tareas anteriores (al salir del modo invitado).
+export function clearScreen() {
+  clearMessage();
+  resetForm();
+  $('filters-form').reset();
+  $('task-list').replaceChildren();
+  setListStatus('');
+  for (const key of ['total', 'pending', 'in_progress', 'completed']) {
+    $(`count-${key}`).textContent = '–';
+  }
 }
 
 /* ---------- Mensajes ---------- */
@@ -164,7 +207,10 @@ export function renderTasks(tasks, handlers, hasActiveFilters) {
 
 // Devuelve el foco al selector de estado de una tarea después de volver a pintar la lista.
 export function focusTaskStatus(taskId) {
-  const select = document.querySelector(`[data-task-id="${Number(taskId)}"] [data-control="status"]`);
+  // El id puede ser un número (API) o un texto (modo invitado): se compara como texto.
+  const item = [...document.querySelectorAll('[data-task-id]')]
+    .find((node) => node.dataset.taskId === String(taskId));
+  const select = item && item.querySelector('[data-control="status"]');
   if (select) select.focus();
 }
 
@@ -193,7 +239,7 @@ export function clearFieldErrors() {
   }
 }
 
-// details: [{ field, message }] tal como lo devuelve la API. Devuelve true si mostró alguno.
+// details: [{ field, message }] tal como lo devuelve el almacén de tareas. Devuelve true si mostró alguno.
 export function showFieldErrors(details = []) {
   const form = $('task-form');
   let firstInvalid = null;
