@@ -30,6 +30,7 @@ before(() => {
 test('el build genera exactamente los archivos del frontend de la demo', () => {
   assert.deepEqual(files, [
     'css/styles.css',
+    'favicon.svg',
     'index.html',
     'js/config.js',
     'js/guest.js',
@@ -78,6 +79,6 @@ test('salvo config.js, los archivos de la demo son copias idénticas de public/'
 test('index.html solo referencia recursos que existen en la demo', () => {
   const html = read(DIST, 'index.html');
   const references = [...html.matchAll(/(?:href|src)="([^"#]+)"/g)].map((match) => match[1]);
-  assert.deepEqual(references.sort(), ['css/styles.css', 'js/main.js']);
+  assert.deepEqual(references.sort(), ['css/styles.css', 'favicon.svg', 'js/main.js']);
   for (const reference of references) assert.ok(files.includes(reference), reference);
 });
