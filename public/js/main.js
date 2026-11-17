@@ -4,6 +4,8 @@
 import { STORAGE_MODE } from './config.js';
 import { loadStore } from './store/index.js';
 import * as guest from './guest.js';
+import * as view from './view.js';
+import * as kanban from './kanban.js';
 import * as ui from './ui.js';
 
 const taskForm = document.getElementById('task-form');
@@ -11,6 +13,8 @@ const filtersForm = document.getElementById('filters-form');
 const cancelEditButton = document.getElementById('cancel-edit-button');
 const enterGuestButton = document.getElementById('enter-guest-button');
 const exitGuestButton = document.getElementById('exit-guest-button');
+const viewChooser = document.getElementById('view-chooser');
+const viewSwitch = document.getElementById('view-switch');
 
 // En la demo web las tareas se guardan en el navegador y hay pantalla de bienvenida.
 const isGuestMode = STORAGE_MODE === 'session';
@@ -129,8 +133,31 @@ async function handleStatusChange(task, newStatus) {
   ui.focusTaskStatus(task.id);
 }
 
+/* ---------- Vistas: lista o tablero Kanban ---------- */
+
+// Muestra la vista pedida y carga sus datos. Cada vista se carga al mostrarse,
+// así siempre refleja lo que hay guardado.
+function openView(name) {
+  ui.showView(name);
+  if (name === 'kanban') {
+    kanban.load();
+  } else {
+    loadTasks();
+  }
+}
+
+// Botones "Lista" y "Tablero Kanban" de la aplicación.
+function handleSwitchView(event) {
+  const button = event.target.closest('[data-view]');
+  if (!button) return;
+  ui.clearMessage();
+  view.setView(button.dataset.view);
+  openView(button.dataset.view);
+}
+
 /* ---------- Modo invitado (solo demo web) ---------- */
 
+// Tras entrar, el invitado elige primero cómo quiere organizar sus tareas.
 function handleEnterGuest() {
   try {
     guest.startGuest();
@@ -138,9 +165,17 @@ function handleEnterGuest() {
     ui.showWelcomeError(error.message);
     return;
   }
+  ui.showViewChooser();
+}
+
+// Botones de la pantalla de elección de vista.
+function handleChooseView(event) {
+  const button = event.target.closest('[data-view]');
+  if (!button) return;
+  view.setView(button.dataset.view);
   ui.showApp({ isGuest: true });
+  openView(button.dataset.view);
   ui.focusGuestExit();
-  loadTasks();
 }
 
 async function handleExitGuest() {
@@ -157,9 +192,11 @@ async function handleExitGuest() {
     return;
   }
 
+  view.clearView();
   editingId = null;
   lastLoadId += 1; // descarta cualquier carga de tareas que siguiera en curso
   ui.clearScreen();
+  kanban.clearScreen();
   ui.showWelcome();
   ui.focusWelcome();
 }
@@ -190,22 +227,31 @@ function bindEvents() {
 
   enterGuestButton.addEventListener('click', handleEnterGuest);
   exitGuestButton.addEventListener('click', handleExitGuest);
+  viewChooser.addEventListener('click', handleChooseView);
+  viewSwitch.addEventListener('click', handleSwitchView);
 }
 
 async function start() {
   store = await loadStore(STORAGE_MODE);
   bindEvents();
+  kanban.init(store);
+
+  // Vista recordada en esta pestaña (null si todavía no se eligió ninguna).
+  const savedView = view.getView();
 
   if (!isGuestMode) {
-    // Versión local: se entra directamente a la aplicación, como siempre.
+    // Versión local: se entra directamente a la aplicación; por defecto, a la lista.
     ui.showApp({ isGuest: false });
-    loadTasks();
-  } else if (guest.isGuestActive()) {
-    // El invitado recargó la página: sigue dentro, con sus tareas.
-    ui.showApp({ isGuest: true });
-    loadTasks();
-  } else {
+    openView(savedView || 'list');
+  } else if (!guest.isGuestActive()) {
     ui.showWelcome();
+  } else if (savedView) {
+    // El invitado recargó la página: sigue dentro, en la vista que tenía.
+    ui.showApp({ isGuest: true });
+    openView(savedView);
+  } else {
+    // Entró como invitado pero recargó antes de elegir vista.
+    ui.showViewChooser();
   }
 }
 
@@ -213,6 +259,7 @@ start().catch((error) => {
   // Solo ocurre si no se puede cargar el código de la aplicación (por ejemplo, sin red).
   console.error(error);
   ui.showApp({ isGuest: false });
+  ui.showView('list');
   ui.setListStatus('');
   ui.showMessage('No se pudo iniciar la aplicación. Recarga la página.', 'error');
 });

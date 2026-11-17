@@ -29,6 +29,22 @@
       <p id="welcome-error" class="message message-error" role="alert" hidden></p>
     </section>
 
+    <!-- Elección de vista: el invitado la ve una vez, justo después de entrar. -->
+    <section id="view-chooser" class="panel welcome" aria-labelledby="chooser-heading" hidden>
+      <h2 id="chooser-heading" tabindex="-1">¿Cómo quieres organizar tus tareas?</h2>
+      <p>Elige una vista para empezar. Podrás cambiar a la otra en cualquier momento.</p>
+      <div class="view-options">
+        <button type="button" class="view-option" data-view="list">
+          <strong>Lista TaskFlow</strong>
+          <span>Tareas con estado, prioridad y fecha límite, con filtros, búsqueda y resumen.</span>
+        </button>
+        <button type="button" class="view-option" data-view="kanban">
+          <strong>Tablero Kanban</strong>
+          <span>Columnas que defines tú y tarjetas que mueves de una columna a otra.</span>
+        </button>
+      </div>
+    </section>
+
     <!-- Aplicación: main.js la muestra cuando sabe qué modo de almacenamiento se usa. -->
     <div id="app" class="app" hidden>
     <!-- Mensajes de éxito y error: los lectores de pantalla los anuncian al cambiar. -->
@@ -36,10 +52,18 @@
 
     <!-- Barra del modo invitado: solo visible en la demo web. -->
     <aside id="guest-bar" class="guest-bar" aria-label="Modo invitado" hidden>
-      <p>Modo invitado: tus tareas se guardan temporalmente en este navegador.</p>
+      <p>Modo invitado: tus tareas y tu tablero se guardan temporalmente en este navegador.</p>
       <button type="button" id="exit-guest-button" class="button button-danger">Salir y borrar mis datos</button>
     </aside>
 
+    <!-- Cambio de vista: lista de tareas o tablero Kanban. -->
+    <nav id="view-switch" class="view-switch" aria-label="Vista">
+      <button type="button" class="button" data-view="list" aria-pressed="true">Lista</button>
+      <button type="button" class="button" data-view="kanban" aria-pressed="false">Tablero Kanban</button>
+    </nav>
+
+    <!-- Vista de lista (TaskFlow). -->
+    <div id="list-view" class="view">
     <section aria-labelledby="dashboard-heading">
       <h2 id="dashboard-heading">Resumen</h2>
       <dl class="dashboard">
@@ -157,6 +181,110 @@
       <p id="list-status" class="list-status" role="status" aria-live="polite">Cargando tareas…</p>
       <ul id="task-list" class="task-list" aria-labelledby="tasks-heading"></ul>
     </section>
+    </div>
+
+    <!-- Vista de tablero Kanban. Las columnas y tarjetas las pinta kanbanUi.js. -->
+    <div id="kanban-view" class="view" hidden>
+    <section class="panel" aria-labelledby="kanban-heading">
+      <div class="kanban-header">
+        <h2 id="kanban-heading" tabindex="-1">Tablero Kanban</h2>
+        <button type="button" id="export-board-button" class="button">Exportar a JSON</button>
+      </div>
+      <p class="kanban-help">
+        Crea tus columnas y añade tarjetas. Para mover una tarjeta, arrástrala con el ratón o usa
+        sus botones de flecha. Las tarjetas del tablero son independientes de las tareas de la lista.
+      </p>
+
+      <form id="column-form" class="column-form" novalidate>
+        <div class="field">
+          <label for="column-name">Nombre de la nueva columna <span aria-hidden="true">*</span></label>
+          <input type="text" id="column-name" name="name" required maxlength="60"
+                 autocomplete="off" aria-describedby="column-error-name">
+          <p class="field-error" id="column-error-name"></p>
+        </div>
+        <div class="field">
+          <label for="column-wip">Límite WIP (opcional)</label>
+          <input type="number" id="column-wip" name="wipLimit" min="1" max="50" step="1"
+                 inputmode="numeric" aria-describedby="column-wip-help column-error-wipLimit">
+          <p class="field-help" id="column-wip-help">Máximo recomendado de tarjetas a la vez.</p>
+          <p class="field-error" id="column-error-wipLimit"></p>
+        </div>
+        <div class="field field-button">
+          <button type="submit" id="add-column-button" class="button button-primary">Añadir columna</button>
+        </div>
+      </form>
+
+      <p id="board-status" class="list-status" role="status" aria-live="polite">Cargando tablero…</p>
+    </section>
+
+    <ol id="board" class="board" aria-label="Columnas del tablero"></ol>
+
+    <!-- Diálogo para crear o editar una tarjeta. -->
+    <dialog id="card-dialog" class="dialog" aria-labelledby="card-dialog-heading">
+      <form id="card-form" novalidate>
+        <h2 id="card-dialog-heading">Nueva tarjeta</h2>
+        <p id="card-dialog-message" class="message message-error" role="alert" hidden></p>
+
+        <div class="field">
+          <label for="card-title">Título <span aria-hidden="true">*</span></label>
+          <input type="text" id="card-title" name="title" required maxlength="150"
+                 autocomplete="off" aria-describedby="card-error-title">
+          <p class="field-error" id="card-error-title"></p>
+        </div>
+        <div class="field">
+          <label for="card-description">Descripción (opcional)</label>
+          <textarea id="card-description" name="description" rows="3" maxlength="2000"
+                    aria-describedby="card-error-description"></textarea>
+          <p class="field-error" id="card-error-description"></p>
+        </div>
+        <div class="field">
+          <label for="card-priority">Prioridad</label>
+          <select id="card-priority" name="priority" aria-describedby="card-error-priority">
+            <option value="low">Baja</option>
+            <option value="medium" selected>Media</option>
+            <option value="high">Alta</option>
+          </select>
+          <p class="field-error" id="card-error-priority"></p>
+        </div>
+        <div class="field">
+          <label for="card-due-date">Fecha límite (opcional)</label>
+          <input type="date" id="card-due-date" name="dueDate" aria-describedby="card-error-dueDate">
+          <p class="field-error" id="card-error-dueDate"></p>
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" id="card-submit-button" class="button button-primary">Crear tarjeta</button>
+          <button type="button" id="card-cancel-button" class="button">Cancelar</button>
+        </div>
+      </form>
+    </dialog>
+
+    <!-- Diálogo para cambiar el nombre y el límite WIP de una columna. -->
+    <dialog id="column-dialog" class="dialog" aria-labelledby="column-dialog-heading">
+      <form id="column-edit-form" novalidate>
+        <h2 id="column-dialog-heading">Editar columna</h2>
+        <p id="column-dialog-message" class="message message-error" role="alert" hidden></p>
+
+        <div class="field">
+          <label for="column-edit-name">Nombre <span aria-hidden="true">*</span></label>
+          <input type="text" id="column-edit-name" name="name" required maxlength="60"
+                 autocomplete="off" aria-describedby="column-edit-error-name">
+          <p class="field-error" id="column-edit-error-name"></p>
+        </div>
+        <div class="field">
+          <label for="column-edit-wip">Límite WIP (vacío = sin límite)</label>
+          <input type="number" id="column-edit-wip" name="wipLimit" min="1" max="50" step="1"
+                 inputmode="numeric" aria-describedby="column-edit-error-wipLimit">
+          <p class="field-error" id="column-edit-error-wipLimit"></p>
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" class="button button-primary">Guardar cambios</button>
+          <button type="button" id="column-cancel-button" class="button">Cancelar</button>
+        </div>
+      </form>
+    </dialog>
+    </div>
     </div>
   </main>
 

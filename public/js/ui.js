@@ -14,7 +14,7 @@ const FORM_FIELDS = ['title', 'description', 'status', 'priority', 'dueDate'];
 const $ = (id) => document.getElementById(id);
 
 // Crea un elemento con clase y texto opcionales.
-function el(tag, className, text) {
+export function el(tag, className, text) {
   const node = document.createElement(tag);
   if (className) node.className = className;
   if (text !== undefined) node.textContent = text;
@@ -22,24 +22,25 @@ function el(tag, className, text) {
 }
 
 // 'YYYY-MM-DD' -> 'DD/MM/YYYY' sin pasar por Date (evita desfases de zona horaria).
-function formatDate(isoDate) {
+export function formatDate(isoDate) {
   const [year, month, day] = isoDate.split('-');
   return `${day}/${month}/${year}`;
 }
 
-function todayIso() {
+export function todayIso() {
   const now = new Date();
   const month = String(now.getMonth() + 1).padStart(2, '0');
   const day = String(now.getDate()).padStart(2, '0');
   return `${now.getFullYear()}-${month}-${day}`;
 }
 
-/* ---------- Vistas: bienvenida y aplicación ---------- */
+/* ---------- Pantallas: bienvenida, elección de vista y aplicación ---------- */
 
 // Muestra la aplicación. Con isGuest = true añade la barra del modo invitado.
 export function showApp({ isGuest }) {
   $('welcome').hidden = true;
   $('welcome-error').hidden = true;
+  $('view-chooser').hidden = true;
   $('guest-bar').hidden = !isGuest;
   $('app').hidden = false;
   $('skip-link').hidden = false;
@@ -48,7 +49,33 @@ export function showApp({ isGuest }) {
 export function showWelcome() {
   $('app').hidden = true;
   $('skip-link').hidden = true;
+  $('view-chooser').hidden = true;
   $('welcome').hidden = false;
+}
+
+// Pantalla en la que el invitado elige cómo organizar sus tareas (lista o tablero).
+export function showViewChooser() {
+  $('welcome').hidden = true;
+  $('app').hidden = true;
+  $('skip-link').hidden = true;
+  $('view-chooser').hidden = false;
+  $('chooser-heading').focus();
+}
+
+const VIEW_SKIP_LINKS = {
+  list: { href: '#tasks-heading', text: 'Saltar a la lista de tareas' },
+  kanban: { href: '#kanban-heading', text: 'Saltar al tablero Kanban' },
+};
+
+// Muestra una de las dos vistas de la aplicación ('list' o 'kanban') y marca su botón.
+export function showView(view) {
+  $('list-view').hidden = view !== 'list';
+  $('kanban-view').hidden = view !== 'kanban';
+  for (const button of document.querySelectorAll('#view-switch [data-view]')) {
+    button.setAttribute('aria-pressed', String(button.dataset.view === view));
+  }
+  $('skip-link').href = VIEW_SKIP_LINKS[view].href;
+  $('skip-link').textContent = VIEW_SKIP_LINKS[view].text;
 }
 
 export function showWelcomeError(text) {

@@ -33,6 +33,9 @@ test('el build genera exactamente los archivos del frontend de la demo', () => {
     'index.html',
     'js/config.js',
     'js/guest.js',
+    'js/kanban.js',
+    'js/kanbanDrag.js',
+    'js/kanbanUi.js',
     'js/main.js',
     'js/store/StoreError.js',
     'js/store/index.js',
@@ -42,6 +45,7 @@ test('el build genera exactamente los archivos del frontend de la demo', () => {
     'js/store/sessionStore.js',
     'js/store/taskRules.js',
     'js/ui.js',
+    'js/view.js',
   ]);
 });
 

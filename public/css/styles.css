@@ -418,3 +418,310 @@ textarea {
     align-items: end;
   }
 }
+
+/* ---------- Elección y cambio de vista ---------- */
+
+.view-options {
+  display: grid;
+  gap: 0.75rem;
+  width: 100%;
+  max-width: 40rem;
+}
+
+.view-option {
+  display: grid;
+  gap: 0.25rem;
+  padding: 1rem;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  background: var(--color-surface);
+  border: 2px solid var(--color-border);
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.view-option:hover {
+  border-color: var(--color-primary);
+}
+
+.view-option strong {
+  font-size: 1.1rem;
+  color: var(--color-primary-dark);
+}
+
+.view-option span {
+  color: var(--color-muted);
+  font-size: 0.9rem;
+}
+
+.view-switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+/* El botón de la vista activa se distingue por color y por un borde más grueso. */
+.view-switch [aria-pressed="true"] {
+  background: var(--color-primary-dark);
+  border-color: var(--color-primary-dark);
+  color: #ffffff;
+  box-shadow: inset 0 -3px 0 #93c5fd;
+}
+
+.view {
+  display: grid;
+  gap: 1.25rem;
+  min-width: 0;
+}
+
+/* Los mensajes siguen a la vista al desplazarse: en un tablero largo quedarían fuera de pantalla. */
+.app > .message {
+  position: sticky;
+  top: 0.5rem;
+  z-index: 5;
+  box-shadow: 0 2px 6px rgb(0 0 0 / 0.15);
+}
+
+/* ---------- Tablero Kanban ---------- */
+
+.kanban-header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.75rem;
+}
+
+.kanban-header h2 {
+  margin-bottom: 0;
+}
+
+.kanban-help,
+.field-help {
+  color: var(--color-muted);
+  font-size: 0.9rem;
+}
+
+.kanban-help {
+  margin-bottom: 1rem;
+}
+
+.column-form {
+  display: grid;
+  gap: 0.75rem;
+}
+
+/* Móvil: las columnas se apilan. En pantallas anchas van en fila con desplazamiento horizontal. */
+.board {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.board[aria-busy="true"] {
+  opacity: 0.6;
+}
+
+.board-column {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+  padding: 0.75rem;
+  background: #e9edf1;
+  border: 1px solid var(--color-border);
+  border-top: 4px solid var(--color-primary);
+  border-radius: var(--radius);
+}
+
+.board-column.over-limit {
+  border-top-color: var(--color-danger);
+}
+
+.board-column.drop-target {
+  outline: 3px dashed var(--color-primary);
+  outline-offset: 2px;
+}
+
+.column-title {
+  font-size: 1.05rem;
+  overflow-wrap: anywhere;
+}
+
+.column-count {
+  color: var(--color-muted);
+  font-size: 0.875rem;
+}
+
+.wip-warning {
+  color: var(--color-danger);
+}
+
+.column-menu summary {
+  cursor: pointer;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--color-primary-dark);
+  padding: 0.25rem 0;
+}
+
+.column-menu-items {
+  display: grid;
+  gap: 0.375rem;
+  padding-top: 0.375rem;
+}
+
+.move-all {
+  display: grid;
+  gap: 0.375rem;
+  padding: 0.5rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+}
+
+.move-all label {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.card-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-height: 3rem; /* una columna vacía sigue teniendo sitio donde soltar tarjetas */
+}
+
+.card-list-empty {
+  padding: 0.75rem;
+  color: var(--color-muted);
+  font-size: 0.9rem;
+  text-align: center;
+  border: 1px dashed #7b8794;
+  border-radius: 6px;
+}
+
+.card {
+  display: grid;
+  gap: 0.375rem;
+  padding: 0.625rem 0.75rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  box-shadow: 0 1px 2px rgb(0 0 0 / 0.08);
+  cursor: grab;
+}
+
+.card.dragging {
+  opacity: 0.4;
+}
+
+.drop-marker {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--color-primary);
+}
+
+.card-title {
+  margin: 0;
+  font-size: 1rem;
+  overflow-wrap: anywhere;
+}
+
+.card-description {
+  font-size: 0.9rem;
+  white-space: pre-line;
+  overflow-wrap: anywhere;
+}
+
+.card-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.375rem;
+  color: var(--color-muted);
+  font-size: 0.85rem;
+}
+
+.card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.button-small,
+.button-icon {
+  min-height: 2rem;
+  padding: 0.25rem 0.5rem;
+  font-size: 0.85rem;
+}
+
+.button-icon {
+  min-width: 2rem;
+}
+
+/* Los botones no disponibles (por ejemplo, "subir" en la primera tarjeta) no son un estado de espera. */
+.card-actions .button:disabled,
+.column-menu .button:disabled,
+.add-card-button:disabled {
+  cursor: not-allowed;
+}
+
+/* ---------- Diálogos ---------- */
+
+.dialog {
+  width: min(32rem, calc(100% - 2rem));
+  padding: 1.25rem;
+  color: var(--color-text);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.dialog::backdrop {
+  background: rgb(15 23 42 / 0.55);
+}
+
+.dialog form {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.dialog h2 {
+  margin-bottom: 0;
+}
+
+@media (min-width: 640px) {
+  .view-options {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .column-form {
+    grid-template-columns: 2fr 1fr auto;
+    align-items: start;
+  }
+
+  /* El botón se alinea con las cajas de texto, no con los textos de ayuda de debajo. */
+  .column-form .field-button {
+    padding-top: 1.6rem;
+    justify-content: flex-start;
+  }
+
+  .board {
+    flex-direction: row;
+    align-items: flex-start;
+    overflow-x: auto;
+  }
+
+  .board-column {
+    flex: 0 0 17rem;
+  }
+}
