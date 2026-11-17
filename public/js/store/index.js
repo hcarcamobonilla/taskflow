@@ -9,6 +9,20 @@
 //   updateTaskStatus(id, status)  -> tarea actualizada
 //   deleteTask(id)                -> null
 //
+// y las del tablero Kanban (apiKanban.js y sessionKanban.js):
+//
+//   getBoard()                           -> { columns: [columna con sus tarjetas en `cards`] }
+//   createColumn({ name, wipLimit })     -> columna creada
+//   updateColumn(id, { name, wipLimit }) -> columna actualizada
+//   moveColumn(id, position)             -> tablero completo
+//   deleteColumn(id)                     -> null (elimina también sus tarjetas)
+//   clearColumn(id)                      -> null (elimina solo sus tarjetas)
+//   moveAllCards(id, targetColumnId)     -> tablero completo
+//   createCard(columnId, card)           -> tarjeta creada
+//   updateCard(id, card)                 -> tarjeta actualizada
+//   moveCard(id, columnId, position)     -> tarjeta movida
+//   deleteCard(id)                       -> null
+//
 // Si algo falla lanzan StoreError. El resto del frontend (main.js, ui.js) solo usa
 // estas funciones y no sabe si detrás hay una API o el navegador.
 

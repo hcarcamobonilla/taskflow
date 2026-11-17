@@ -2,7 +2,7 @@
 //
 //   - Copia el frontend compartido tal cual: no hay una segunda copia que mantener.
 //   - Sustituye js/config.js para que el almacenamiento sea sessionStorage.
-//   - Deja fuera el adaptador de la API: la demo no puede llamar al backend.
+//   - Deja fuera los adaptadores de la API: la demo no puede llamar al backend.
 //
 // Solo usa módulos nativos de Node. Uso: npm run build:demo
 
@@ -15,7 +15,9 @@ const OUTPUT_DIR = path.join(ROOT, 'dist-demo');
 
 // Archivos de public/ que no forman parte de la demo (rutas relativas a public/).
 const EXCLUDED = new Set([
-  path.join('js', 'store', 'apiStore.js'), // adaptador HTTP: solo versión local
+  path.join('js', 'store', 'apiStore.js'),  // adaptador HTTP de tareas: solo versión local
+  path.join('js', 'store', 'apiKanban.js'), // adaptador HTTP del tablero: solo versión local
+  path.join('js', 'store', 'http.js'),      // peticiones fetch: solo versión local
   path.join('js', 'package.json'),         // solo sirve a Node para las pruebas
 ]);
 

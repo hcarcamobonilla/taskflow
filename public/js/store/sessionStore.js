@@ -6,6 +6,8 @@
 // lo que hay guardado.
 
 import { StoreError } from './StoreError.js';
+import { readJson, writeJson, removeKey, corruptDataError, newId, now } from './sessionAccess.js';
+import { KANBAN_KEY } from './sessionKanban.js';
 import {
   validateTask,
   validateStatus,
@@ -16,28 +18,13 @@ import {
   PRIORITIES,
 } from './taskRules.js';
 
+// El tablero Kanban forma parte de la misma interfaz del almacén.
+export * from './sessionKanban.js';
+
 // Clave propia de TaskFlow: nunca se toca ningún otro dato del mismo origen.
 export const TASKS_KEY = 'taskflow.guest.tasks';
 
-const BLOCKED_MESSAGE =
-  'Tu navegador no permite guardar datos temporales. Revisa la configuración de privacidad o prueba en otra ventana.';
-const CORRUPT_MESSAGE =
-  'Los datos guardados en este navegador están dañados y no se pueden leer. Usa «Salir y borrar mis datos» para empezar de nuevo.';
-const FULL_MESSAGE =
-  'No queda espacio para guardar más datos en este navegador. Elimina algunas tareas e inténtalo de nuevo.';
-
-/* ---------- Acceso a sessionStorage ---------- */
-
-function getStorage() {
-  // Con el almacenamiento bloqueado, el simple acceso a la propiedad puede lanzar un error.
-  try {
-    const storage = globalThis.sessionStorage;
-    if (storage) return storage;
-  } catch {
-    // Se trata igual que si no existiera.
-  }
-  throw new StoreError(BLOCKED_MESSAGE);
-}
+/* ---------- Lectura y escritura ---------- */
 
 function looksLikeTask(item) {
   return (
@@ -53,59 +40,14 @@ function looksLikeTask(item) {
 
 // Devuelve las tareas en orden de creación (la más antigua primero).
 function readTasks() {
-  const storage = getStorage();
-
-  let raw;
-  try {
-    raw = storage.getItem(TASKS_KEY);
-  } catch {
-    throw new StoreError(BLOCKED_MESSAGE);
-  }
-  if (raw === null) return [];
-
-  let tasks;
-  try {
-    tasks = JSON.parse(raw);
-  } catch {
-    throw new StoreError(CORRUPT_MESSAGE);
-  }
-  if (!Array.isArray(tasks) || !tasks.every(looksLikeTask)) {
-    throw new StoreError(CORRUPT_MESSAGE);
-  }
+  const tasks = readJson(TASKS_KEY);
+  if (tasks === null) return [];
+  if (!Array.isArray(tasks) || !tasks.every(looksLikeTask)) throw corruptDataError();
   return tasks;
 }
 
-function isQuotaError(error) {
-  return (
-    error &&
-    (error.name === 'QuotaExceededError' ||
-      error.name === 'NS_ERROR_DOM_QUOTA_REACHED' ||
-      error.code === 22)
-  );
-}
-
 function writeTasks(tasks) {
-  const storage = getStorage();
-  try {
-    storage.setItem(TASKS_KEY, JSON.stringify(tasks));
-  } catch (error) {
-    throw new StoreError(isQuotaError(error) ? FULL_MESSAGE : BLOCKED_MESSAGE);
-  }
-}
-
-/* ---------- Utilidades ---------- */
-
-function newId() {
-  const cryptoApi = globalThis.crypto;
-  if (cryptoApi && typeof cryptoApi.randomUUID === 'function') {
-    return cryptoApi.randomUUID();
-  }
-  // randomUUID solo existe en contextos seguros (HTTPS o localhost); esto cubre el resto.
-  return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
-}
-
-function now() {
-  return new Date().toISOString();
+  writeJson(TASKS_KEY, tasks);
 }
 
 function findIndexOrFail(tasks, id) {
@@ -165,12 +107,9 @@ export async function deleteTask(id) {
 
 /* ---------- Solo modo invitado ---------- */
 
-// Borra todas las tareas del invitado. Funciona aunque los datos estén dañados.
+// Borra todos los datos del invitado (tareas y tablero Kanban).
+// Funciona aunque los datos estén dañados.
 export async function clearAll() {
-  const storage = getStorage();
-  try {
-    storage.removeItem(TASKS_KEY);
-  } catch {
-    throw new StoreError(BLOCKED_MESSAGE);
-  }
+  removeKey(TASKS_KEY);
+  removeKey(KANBAN_KEY);
 }
