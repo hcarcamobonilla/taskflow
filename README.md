@@ -1,8 +1,9 @@
 # TaskFlow — Seguimiento de tareas
 
 Aplicación web full stack para gestionar tareas: crear, consultar, editar, eliminar, filtrar,
-buscar y ordenar, con un pequeño panel de recuentos por estado. Es un proyecto de portafolio
-de un solo usuario, sin cuentas ni autenticación.
+buscar y ordenar, con un pequeño panel de recuentos por estado. Además incluye un **tablero
+Kanban** con columnas y tarjetas que se pueden reordenar. Es un proyecto de portafolio de un
+solo usuario, sin cuentas ni autenticación.
 
 ## Dos versiones, un mismo código
 
@@ -29,6 +30,9 @@ La interfaz, los formularios y los estilos son los mismos archivos en ambas vers
 - Dashboard con el total de tareas y el recuento por estado.
 - Cambio rápido de estado desde la lista.
 - Validación en el servidor y mensajes de error claros en la interfaz.
+- **Tablero Kanban** como segunda vista (ver "Tablero Kanban"): columnas y tarjetas
+  propias, reordenables con botones o arrastrando, con límite WIP opcional y exportación a JSON.
+  Funciona en la versión local y en la demo.
 
 ## Stack tecnológico
 
@@ -70,11 +74,18 @@ seguimiento_tareas/
 │       ├── main.js         Eventos y coordinación
 │       ├── ui.js           Lectura y escritura del DOM
 │       ├── guest.js        Entrada y salida del modo invitado
-│       └── store/          Almacén de tareas
+│       ├── view.js         Vista elegida (lista o Kanban), recordada en la pestaña
+│       ├── kanban.js       Eventos del tablero y comunicación con el almacén
+│       ├── kanbanUi.js     Pinta el tablero y sus diálogos en el DOM
+│       ├── kanbanDrag.js   Arrastrar y soltar tarjetas (complemento de los botones)
+│       └── store/          Almacén de tareas y del tablero
 │           ├── index.js        Carga el adaptador elegido
 │           ├── apiStore.js     Adaptador HTTP (Fetch → API REST)
+│           ├── apiKanban.js    Tablero: llamadas a /api/kanban (versión local)
 │           ├── sessionStore.js Adaptador de sessionStorage
-│           ├── taskRules.js    Validación, filtros y orden para la demo
+│           ├── sessionKanban.js Tablero en sessionStorage (demo)
+│           ├── taskRules.js    Validación, filtros y orden de tareas para la demo
+│           ├── kanbanRules.js  Validación y topes del tablero para la demo
 │           └── StoreError.js   Error común a ambos adaptadores
 ├── src/                    Backend
 │   ├── server.js           Arranque del servidor
@@ -82,13 +93,15 @@ seguimiento_tareas/
 │   ├── config.js           Variables de entorno
 │   ├── db/pool.js          Pool de conexiones a PostgreSQL
 │   ├── routes/             URL y método → controlador
-│   ├── controllers/        Petición → validación → repositorio → respuesta
+│   ├── controllers/        Petición → validación → (servicio) → respuesta
+│   ├── services/           Lógica del Kanban: topes, reordenación y transacciones
 │   ├── validators/         Validación de la entrada
 │   ├── repositories/       Consultas SQL
+│   ├── db/transaction.js   Ayudante BEGIN / COMMIT / ROLLBACK
 │   ├── middleware/         Manejo centralizado de errores
 │   └── utils/HttpError.js  Error con código HTTP
 ├── db/
-│   ├── schema.sql          Tabla, restricciones, índices y trigger
+│   ├── schema.sql          Tablas (tasks y Kanban), restricciones, índices y triggers
 │   └── seed.sql            Datos de demostración
 ├── scripts/
 │   ├── db-setup.js         Crea las bases de datos y aplica el esquema
@@ -223,6 +236,30 @@ Los scripts de base de datos son idempotentes: pueden repetirse sin borrar datos
 - **Eliminar**: pulsa "Eliminar" y acepta la confirmación.
 - **Filtrar, buscar y ordenar**: usa los controles sobre la lista. "Limpiar filtros" los restablece.
 - El **resumen** superior muestra siempre los recuentos de todas las tareas, aunque haya filtros.
+- **Cambiar de vista**: el selector "Vista" alterna entre "Lista" y "Tablero Kanban". En la
+  versión local se abre la lista; en la demo, tras entrar como invitado, se pregunta qué vista
+  se prefiere. La elección se recuerda en la pestaña.
+
+## Tablero Kanban
+
+Es una segunda vista, independiente de la lista: sus tarjetas **no** son las tareas de la lista
+ni se sincronizan con ellas (tablas propias `kanban_columns` y `kanban_cards`).
+
+- **Columnas**: se añaden con nombre (máx. 60 caracteres) y un límite WIP opcional (1 a 50).
+  Se pueden renombrar, mover a la izquierda o a la derecha, vaciar y eliminar (con confirmación; al eliminar una
+  columna se eliminan sus tarjetas). También se pueden pasar todas sus tarjetas a otra columna.
+- **Tarjetas**: título obligatorio (máx. 150), descripción (máx. 2000), prioridad y fecha límite
+  opcional. Se crean desde la columna, se editan y se eliminan con confirmación.
+- **Reordenar**: cada tarjeta tiene botones ↑ ↓ ← → que funcionan con teclado y lector de
+  pantalla. Con el ratón también se puede arrastrar y soltar; el arrastre es un complemento y
+  no sustituye a los botones.
+- **Límite WIP**: es un aviso ("Límite WIP superado"), no un bloqueo.
+- **Topes**: máximo 8 columnas por tablero y 50 tarjetas por columna; al superarlos la API
+  responde `409` y la demo muestra el mismo mensaje.
+- **Exportar a JSON**: descarga el tablero completo como archivo.
+- En la versión local, `npm run db:seed` crea un tablero de ejemplo ("Por hacer", "En curso"
+  con límite 2 y "Hecho") solo si el tablero no tiene ninguna columna. En la demo el tablero
+  empieza vacío.
 
 ## Demo web (modo invitado)
 
@@ -231,10 +268,10 @@ Los scripts de base de datos son idempotentes: pueden repetirse sin borrar datos
 1. Ve la pantalla "Bienvenido a TaskFlow" y pulsa **Entrar como invitado**. No hay registro,
    correo ni contraseña, y no se crea ninguna cuenta ni sesión en un servidor.
 2. Usa la aplicación con todas sus funciones: crear, editar, eliminar, estados, prioridades,
-   fechas, búsqueda, filtros, orden y resumen.
+   fechas, búsqueda, filtros, orden y resumen, además del tablero Kanban.
 3. Sus tareas se guardan solo en su navegador. Otros visitantes no las ven.
-4. Con **Salir y borrar mis datos** (pide confirmación) se eliminan sus tareas y vuelve a la
-   pantalla de bienvenida.
+4. Con **Salir y borrar mis datos** (pide confirmación) se eliminan sus tareas, su tablero y
+   la vista elegida, y vuelve a la pantalla de bienvenida.
 
 ### Generar la demo
 
@@ -352,13 +389,45 @@ Formato de las respuestas:
 Códigos de error: `400` entrada no válida o JSON malformado, `404` tarea o ruta inexistente,
 `503` base de datos no disponible, `500` error inesperado (sin detalles internos).
 
+### API del tablero Kanban (versión local)
+
+Base: `/api/kanban`. Mismo formato de respuesta y de error que la API de tareas. Las `position`
+empiezan en 0; si en un movimiento se omite `position` (o se pasa del final), el elemento va al
+final.
+
+| Método | Ruta | Descripción | Respuestas |
+|--------|------|-------------|------------|
+| GET | `/api/kanban` | Tablero completo: columnas en orden, cada una con sus tarjetas | 200 |
+| POST | `/api/kanban/columns` | Crea una columna al final (`name`, `wipLimit` opcional) | 201, 400, 409 |
+| PUT | `/api/kanban/columns/:id` | Cambia nombre y límite WIP | 200, 400, 404 |
+| PATCH | `/api/kanban/columns/:id/move` | Mueve la columna a `position`; devuelve el tablero | 200, 400, 404 |
+| DELETE | `/api/kanban/columns/:id` | Elimina la columna y sus tarjetas | 204, 400, 404 |
+| POST | `/api/kanban/columns/:id/cards` | Crea una tarjeta al final de la columna | 201, 400, 404, 409 |
+| DELETE | `/api/kanban/columns/:id/cards` | Vacía la columna (elimina sus tarjetas) | 204, 400, 404 |
+| POST | `/api/kanban/columns/:id/move-cards` | Pasa todas sus tarjetas a `targetColumnId`; devuelve el tablero | 200, 400, 404, 409 |
+| PUT | `/api/kanban/cards/:id` | Reemplaza título, descripción, prioridad y fecha | 200, 400, 404 |
+| PATCH | `/api/kanban/cards/:id/move` | Mueve la tarjeta a `columnId` y `position` (opcional) | 200, 400, 404, 409 |
+| DELETE | `/api/kanban/cards/:id` | Elimina la tarjeta | 204, 400, 404 |
+
+`409` significa que se superó un tope (8 columnas, 50 tarjetas por columna). Los movimientos
+renumeran las posiciones de las filas afectadas dentro de una **transacción**: o se guardan
+todos los cambios o ninguno.
+
+```bash
+curl http://localhost:3000/api/kanban
+
+curl -X PATCH http://localhost:3000/api/kanban/cards/1/move \
+  -H "Content-Type: application/json" \
+  -d '{"columnId":2,"position":0}'
+```
+
 ## Pruebas
 
 ```bash
 npm test
 ```
 
-Requiere PostgreSQL en marcha y haber ejecutado `npm run db:setup`. Hay 76 pruebas:
+Requiere PostgreSQL en marcha y haber ejecutado `npm run db:setup`. Hay 138 pruebas:
 
 - `tests/validator.test.js`: pruebas unitarias de validación (sin base de datos).
 - `tests/tasks.api.test.js`: pruebas de integración reales. Envían peticiones HTTP a la
@@ -373,7 +442,13 @@ Requiere PostgreSQL en marcha y haber ejecutado `npm run db:setup`. Hay 76 prueb
   modo invitado y errores (almacenamiento bloqueado, dañado o lleno).
 - `tests/store-parity.test.js`: aplica las mismas operaciones a la API con PostgreSQL y al
   adaptador de `sessionStorage`, y exige resultados idénticos (datos, orden, recuentos y
-  mensajes de error).
+  mensajes de error). Incluye casos del tablero Kanban.
+- `tests/kanban.validator.test.js`: pruebas unitarias de las reglas del tablero (sin base de datos).
+- `tests/kanban.api.test.js`: integración real contra PostgreSQL: CRUD de columnas y tarjetas,
+  reordenación y renumeración de posiciones, movimiento entre columnas, topes (`409`), ids
+  inexistentes y que una operación fallida no deje cambios a medias (transacciones).
+- `tests/session-kanban.test.js`: el adaptador real del tablero en `sessionStorage` (con un
+  almacenamiento simulado), incluidos datos dañados y salida del modo invitado.
 - `tests/build-demo.test.js`: ejecuta el build y comprueba que `dist-demo/` contiene solo el
   frontend, en modo `'session'`, sin llamadas a la API ni archivos del backend.
 
@@ -385,7 +460,13 @@ Las pruebas no tocan la base de desarrollo `taskflow`.
   tal como está; lo que se publica es la demo estática, que no tiene backend.
 - Demo web: los datos son temporales y locales a cada pestaña (ver "Límites de sessionStorage").
 - Las reglas de validación, filtros y orden existen dos veces: en el servidor y en
-  `public/js/store/taskRules.js`. La prueba de paridad avisa si dejan de coincidir.
+  `public/js/store/taskRules.js` (tareas) y `kanbanRules.js` (tablero). La prueba de paridad
+  avisa si dejan de coincidir.
+- Las tarjetas del Kanban son independientes de las tareas de la lista: mover una tarjeta no
+  cambia el estado de ninguna tarea.
+- Kanban: sin edición simultánea (un solo usuario); las columnas
+  solo se mueven con sus botones (no se arrastran); el arrastre de tarjetas está pensado para
+  el ratón y no se ha probado en pantallas táctiles (allí se usan los botones).
 - Sin paginación: la lista devuelve todas las tareas que cumplen los filtros.
 - No hay pruebas automatizadas de interfaz en un navegador real. Durante el desarrollo los dos
   modos se verificaron ejecutando sus módulos sobre un DOM simulado (jsdom); esa comprobación
