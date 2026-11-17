@@ -3,12 +3,23 @@
 const pool = require('../../src/db/pool');
 const config = require('../../src/config');
 
-// Vacía la tabla y reinicia los ids. Se niega a ejecutarse fuera de la base de pruebas.
-async function resetTasks() {
+// Las funciones de vaciado se niegan a ejecutarse fuera de la base de pruebas.
+function assertTestDatabase() {
   if (config.env !== 'test' || config.database !== process.env.PGDATABASE_TEST) {
-    throw new Error('resetTasks solo puede ejecutarse contra la base de datos de pruebas');
+    throw new Error('Las tablas solo pueden vaciarse en la base de datos de pruebas');
   }
+}
+
+// Vacía la tabla de tareas y reinicia los ids.
+async function resetTasks() {
+  assertTestDatabase();
   await pool.query('TRUNCATE TABLE tasks RESTART IDENTITY');
 }
 
-module.exports = { pool, resetTasks };
+// Vacía el tablero Kanban (columnas y tarjetas) y reinicia los ids.
+async function resetKanban() {
+  assertTestDatabase();
+  await pool.query('TRUNCATE TABLE kanban_cards, kanban_columns RESTART IDENTITY');
+}
+
+module.exports = { pool, resetTasks, resetKanban };

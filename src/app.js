@@ -4,6 +4,7 @@
 const path = require('node:path');
 const express = require('express');
 const tasksRouter = require('./routes/tasks.routes');
+const kanbanRouter = require('./routes/kanban.routes');
 const { apiNotFound, errorHandler } = require('./middleware/errorHandler');
 
 function createApp() {
@@ -19,6 +20,7 @@ function createApp() {
     res.json({ status: 'ok' });
   });
   app.use('/api/tasks', tasksRouter);
+  app.use('/api/kanban', kanbanRouter);
 
   app.use('/api', apiNotFound);
   app.use(errorHandler);

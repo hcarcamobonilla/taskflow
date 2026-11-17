@@ -29,3 +29,10 @@ test('el endpoint de salud y la validación siguen funcionando sin base de datos
   assert.equal((await request(app).get('/api/health')).status, 200);
   assert.equal((await request(app).post('/api/tasks').send({ title: '' })).status, 400);
 });
+
+test('el tablero Kanban también responde 503 con la base caída (lecturas y transacciones)', async () => {
+  assert.equal((await request(app).get('/api/kanban')).status, 503);
+  const res = await request(app).post('/api/kanban/columns').send({ name: 'No se guardará' });
+  assert.equal(res.status, 503);
+  assert.deepEqual(Object.keys(res.body.error), ['message']);
+});
