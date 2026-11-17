@@ -4,7 +4,7 @@
 
 import * as ui from './ui.js';
 import * as boardUi from './kanbanUi.js';
-import { enableCardDrag } from './kanbanDrag.js';
+import { enableDrag } from './kanbanDrag.js';
 import { toExport } from './store/kanbanRules.js';
 
 // Adaptador de almacenamiento; lo entrega main.js en init().
@@ -29,7 +29,6 @@ const handlers = {
   onAddCard: handleAddCard,
   onEditCard: handleEditCard,
   onDeleteCard: handleDeleteCard,
-  onMoveCard: handleMoveCard,
 };
 
 export async function load() {
@@ -177,10 +176,10 @@ async function handleDeleteCard(card) {
   boardUi.focusColumn(card.columnId);
 }
 
-// position = null la deja al final de la columna. `action` es el botón usado (para el foco).
-async function handleMoveCard(card, columnId, position, action) {
+// position = null la deja al final de la columna.
+async function handleMoveCard(card, columnId, position) {
   await applyChange(() => store.moveCard(card.id, columnId, position));
-  boardUi.focusCard(card.id, action);
+  boardUi.focusCard(card.id);
 }
 
 // Al soltar una tarjeta arrastrada. Si cae donde ya estaba, no se hace nada.
@@ -189,6 +188,12 @@ function handleDropCard(cardId, columnId, position) {
   if (!card) return;
   const isSamePlace = String(card.columnId) === String(columnId) && card.position === position;
   if (!isSamePlace) handleMoveCard(card, columnId, position);
+}
+
+// Al soltar una columna arrastrada. Si cae donde ya estaba, no se hace nada.
+function handleDropColumn(columnId, position) {
+  const column = currentBoard.columns.find((candidate) => String(candidate.id) === String(columnId));
+  if (column && column.position !== position) handleMoveColumn(column, position);
 }
 
 /* ---------- Exportación ---------- */
@@ -215,7 +220,7 @@ export function init(selectedStore) {
   document.getElementById('card-cancel-button').addEventListener('click', boardUi.closeCardDialog);
   document.getElementById('export-board-button').addEventListener('click', handleExport);
 
-  enableCardDrag(document.getElementById('board'), handleDropCard);
+  enableDrag(document.getElementById('board'), { onDropCard: handleDropCard, onDropColumn: handleDropColumn });
 }
 
 // Deja el tablero vacío en pantalla (al salir del modo invitado).

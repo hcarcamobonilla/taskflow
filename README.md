@@ -77,7 +77,8 @@ seguimiento_tareas/
 │       ├── view.js         Vista elegida (lista o Kanban), recordada en la pestaña
 │       ├── kanban.js       Eventos del tablero y comunicación con el almacén
 │       ├── kanbanUi.js     Pinta el tablero y sus diálogos en el DOM
-│       ├── kanbanDrag.js   Arrastrar y soltar tarjetas (complemento de los botones)
+│       ├── dropPosition.js Cálculo puro de la posición al soltar (con prueba)
+│       ├── kanbanDrag.js   Arrastrar y soltar tarjetas y columnas (con ratón)
 │       └── store/          Almacén de tareas y del tablero
 │           ├── index.js        Carga el adaptador elegido
 │           ├── apiStore.js     Adaptador HTTP (Fetch → API REST)
@@ -250,9 +251,11 @@ ni se sincronizan con ellas (tablas propias `kanban_columns` y `kanban_cards`).
   columna se eliminan sus tarjetas). También se pueden pasar todas sus tarjetas a otra columna.
 - **Tarjetas**: título obligatorio (máx. 150), descripción (máx. 2000), prioridad y fecha límite
   opcional. Se crean desde la columna, se editan y se eliminan con confirmación.
-- **Reordenar**: cada tarjeta tiene botones ↑ ↓ ← → que funcionan con teclado y lector de
-  pantalla. Con el ratón también se puede arrastrar y soltar; el arrastre es un complemento y
-  no sustituye a los botones.
+- **Reordenar tarjetas**: se arrastran con el ratón, dentro de su columna o a otra columna; una
+  línea azul indica dónde caerán.
+- **Reordenar columnas**: se arrastran con el asa ⠿ del encabezado. Los botones «Mover a la
+  izquierda/derecha» del menú «Opciones» de cada columna hacen lo mismo con teclado y lector de
+  pantalla.
 - **Límite WIP**: es un aviso ("Límite WIP superado"), no un bloqueo.
 - **Topes**: máximo 8 columnas por tablero y 50 tarjetas por columna; al superarlos la API
   responde `409` y la demo muestra el mismo mensaje.
@@ -465,8 +468,9 @@ Las pruebas no tocan la base de desarrollo `taskflow`.
 - Las tarjetas del Kanban son independientes de las tareas de la lista: mover una tarjeta no
   cambia el estado de ninguna tarea.
 - Kanban: sin edición simultánea (un solo usuario); las columnas
-  solo se mueven con sus botones (no se arrastran); el arrastre de tarjetas está pensado para
-  el ratón y no se ha probado en pantallas táctiles (allí se usan los botones).
+  se pueden mover con el menú «Opciones» (teclado, lector de pantalla y pantallas táctiles), pero
+  las tarjetas solo se mueven arrastrándolas: el arrastre está pensado para el ratón y no se ha
+  probado en pantallas táctiles, donde las tarjetas no se pueden reordenar.
 - Sin paginación: la lista devuelve todas las tareas que cumplen los filtros.
 - No hay pruebas automatizadas de interfaz en un navegador real. Durante el desarrollo los dos
   modos se verificaron ejecutando sus módulos sobre un DOM simulado (jsdom); esa comprobación

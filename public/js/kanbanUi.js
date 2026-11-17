@@ -38,7 +38,7 @@ export function clearBoard() {
 
 /* ---------- Tarjetas ---------- */
 
-function buildCard(card, column, board, handlers) {
+function buildCard(card, handlers) {
   const item = el('li', 'card');
   item.dataset.cardId = card.id;
   item.draggable = true;
@@ -59,30 +59,8 @@ function buildCard(card, column, board, handlers) {
   }
   item.append(meta);
 
-  const previous = board.columns[column.position - 1];
-  const next = board.columns[column.position + 1];
   const title = `«${card.title}»`;
-
-  // Cada botón: [acción, texto, etiqueta accesible, disponible, qué hace]
-  const moves = [
-    ['up', '↑', `Subir ${title}`, card.position > 0,
-      () => handlers.onMoveCard(card, column.id, card.position - 1, 'up')],
-    ['down', '↓', `Bajar ${title}`, card.position < column.cards.length - 1,
-      () => handlers.onMoveCard(card, column.id, card.position + 1, 'down')],
-    ['left', '←', previous ? `Mover ${title} a la columna «${previous.name}»` : `Mover ${title} a la columna anterior`, Boolean(previous),
-      () => handlers.onMoveCard(card, previous.id, null, 'left')],
-    ['right', '→', next ? `Mover ${title} a la columna «${next.name}»` : `Mover ${title} a la columna siguiente`, Boolean(next),
-      () => handlers.onMoveCard(card, next.id, null, 'right')],
-  ];
-
   const actions = el('div', 'card-actions');
-  for (const [action, text, label, isAvailable, onClick] of moves) {
-    const node = button(text, 'button button-icon', label);
-    node.dataset.action = action;
-    node.disabled = !isAvailable;
-    node.addEventListener('click', onClick);
-    actions.append(node);
-  }
 
   const editButton = button('Editar', 'button button-small', `Editar ${title}`);
   editButton.dataset.action = 'edit';
@@ -166,18 +144,28 @@ function buildColumnMenu(column, board, handlers) {
   return menu;
 }
 
+// Asa para arrastrar la columna. Es decorativa para lector de pantalla: el equivalente
+// accesible son los botones de mover del menú de opciones.
+function buildColumnHandle(column) {
+  const handle = el('span', 'column-handle', '⠿');
+  handle.draggable = true;
+  handle.title = `Arrastrar para mover la columna «${column.name}»`;
+  handle.setAttribute('aria-hidden', 'true');
+  return handle;
+}
+
 function buildColumn(column, board, handlers) {
   const isOverLimit = column.wipLimit !== null && column.cards.length > column.wipLimit;
   const item = el('li', isOverLimit ? 'board-column over-limit' : 'board-column');
   item.dataset.columnId = column.id;
 
   const header = el('div', 'column-header');
-  header.append(el('h3', 'column-title', column.name), buildColumnCount(column));
+  header.append(buildColumnHandle(column), el('h3', 'column-title', column.name), buildColumnCount(column));
   item.append(header, buildColumnMenu(column, board, handlers));
 
   const list = el('ul', 'card-list');
   list.setAttribute('aria-label', `Tarjetas de «${column.name}»`);
-  list.append(...column.cards.map((card) => buildCard(card, column, board, handlers)));
+  list.append(...column.cards.map((card) => buildCard(card, handlers)));
   if (column.cards.length === 0) list.append(el('li', 'card-list-empty', 'Sin tarjetas'));
   item.append(list);
 
@@ -215,7 +203,7 @@ function findByData(selector, key, id) {
   return [...document.querySelectorAll(selector)].find((node) => node.dataset[key] === String(id));
 }
 
-// Devuelve el foco al botón de la tarjeta que se usó; si ya no está disponible, a la tarjeta.
+// Devuelve el foco al botón indicado de la tarjeta (action); sin botón o si ya no está disponible, a la tarjeta.
 export function focusCard(cardId, action) {
   const card = findByData('.card', 'cardId', cardId);
   if (!card) return focusBoardHeading();

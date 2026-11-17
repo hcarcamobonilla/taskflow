@@ -33,6 +33,7 @@ test('el build genera exactamente los archivos del frontend de la demo', () => {
     'favicon.svg',
     'index.html',
     'js/config.js',
+    'js/dropPosition.js',
     'js/guest.js',
     'js/kanban.js',
     'js/kanbanDrag.js',

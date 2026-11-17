@@ -548,6 +548,26 @@ textarea {
   outline-offset: 2px;
 }
 
+.column-handle {
+  float: left;
+  margin-right: 0.5rem;
+  color: var(--color-muted);
+  cursor: grab;
+  line-height: 1.4;
+  user-select: none;
+}
+
+.board-column.dragging {
+  opacity: 0.4;
+}
+
+.column-drop-marker {
+  flex: 0 0 auto;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--color-primary);
+}
+
 .column-title {
   font-size: 1.05rem;
   overflow-wrap: anywhere;
@@ -668,7 +688,7 @@ textarea {
   min-width: 2rem;
 }
 
-/* Los botones no disponibles (por ejemplo, "subir" en la primera tarjeta) no son un estado de espera. */
+/* Los botones no disponibles (por ejemplo, "mover a la izquierda" en la primera columna) no son un estado de espera. */
 .card-actions .button:disabled,
 .column-menu .button:disabled,
 .add-card-button:disabled {
@@ -723,5 +743,11 @@ textarea {
 
   .board-column {
     flex: 0 0 17rem;
+  }
+
+  .column-drop-marker {
+    flex: 0 0 4px;
+    align-self: stretch;
+    height: auto;
   }
 }
