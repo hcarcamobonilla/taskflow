@@ -4,7 +4,7 @@
 import { el, formatDate, todayIso, PRIORITY_LABELS } from './ui.js';
 import { MAX_COLUMNS, MAX_CARDS_PER_COLUMN } from './store/kanbanRules.js';
 
-const COLUMN_FIELDS = ['name', 'wipLimit'];
+const COLUMN_FIELDS = ['name'];
 const CARD_FIELDS = ['title', 'description', 'priority', 'dueDate'];
 
 const $ = (id) => document.getElementById(id);
@@ -32,6 +32,8 @@ export function setBoardStatus(text) {
 // Deja la pantalla sin rastro del tablero anterior (al salir del modo invitado).
 export function clearBoard() {
   $('board').replaceChildren();
+  $('project-name').value = '';
+  $('project-description').value = '';
   setBoardStatus('');
   resetColumnForm();
 }
@@ -44,20 +46,22 @@ function buildCard(card, handlers) {
   item.draggable = true;
   item.tabIndex = -1; // permite devolverle el foco después de volver a pintar el tablero
 
-  item.append(el('h4', 'card-title', card.title));
+  // La prioridad va arriba del título, alineada a la izquierda.
+  const priority = el('p', 'card-priority');
+  priority.append(el('span', `badge badge-priority-${card.priority}`, `Prioridad ${PRIORITY_LABELS[card.priority].toLowerCase()}`));
+  item.append(priority, el('h4', 'card-title', card.title));
   if (card.description) item.append(el('p', 'card-description', card.description));
 
-  const meta = el('p', 'card-meta');
-  meta.append(el('span', `badge badge-priority-${card.priority}`, `Prioridad ${PRIORITY_LABELS[card.priority].toLowerCase()}`));
   if (card.dueDate) {
+    const meta = el('p', 'card-meta');
     const due = el('span', '', 'Fecha límite: ');
     const time = el('time', '', formatDate(card.dueDate));
     time.dateTime = card.dueDate;
     due.append(time);
     if (card.dueDate < todayIso()) due.append(' ', el('strong', 'overdue', '(vencida)'));
     meta.append(due);
+    item.append(meta);
   }
-  item.append(meta);
 
   const title = `«${card.title}»`;
   const actions = el('div', 'card-actions');
@@ -76,70 +80,42 @@ function buildCard(card, handlers) {
 
 /* ---------- Columnas ---------- */
 
+// Cantidad de tarjetas: «| 3» en gris, al lado del nombre. «tarjetas» queda solo para lector de pantalla.
 function buildColumnCount(column) {
-  const count = column.cards.length;
-  const text = column.wipLimit === null
-    ? plural(count, 'tarjeta', 'tarjetas')
-    : `${count} / ${column.wipLimit} tarjetas`;
-  const node = el('p', 'column-count', text);
-  if (column.wipLimit !== null && count > column.wipLimit) {
-    // El aviso va también en texto: no depende solo del color.
-    node.append(' ', el('strong', 'wip-warning', 'Límite WIP superado'));
-  }
+  const node = el('span', 'column-count');
+  const separator = el('span', '', '|');
+  separator.setAttribute('aria-hidden', 'true');
+  node.append(separator, ' ', String(column.cards.length), el('span', 'visually-hidden', ' tarjetas'));
   return node;
 }
 
-// Menú de opciones de la columna. <details> se abre y se cierra sin JavaScript
-// y funciona con teclado.
+// Menú de opciones de la columna (tres puntos arriba a la derecha). <details> se abre y se
+// cierra sin JavaScript y funciona con teclado; kanban.js lo cierra al elegir una opción,
+// al hacer clic fuera o al pulsar Escape.
 function buildColumnMenu(column, board, handlers) {
   const menu = el('details', 'column-menu');
-  const summary = el('summary', '', 'Opciones');
+  const summary = el('summary', '', '⋯');
   summary.setAttribute('aria-label', `Opciones de la columna «${column.name}»`);
   menu.append(summary);
 
   const items = el('div', 'column-menu-items');
-  const isFirst = column.position === 0;
-  const isLast = column.position === board.columns.length - 1;
-  const hasCards = column.cards.length > 0;
+  const name = `«${column.name}»`;
 
-  const editButton = button('Editar nombre y límite', 'button button-small');
+  const editButton = button('Editar', 'button button-small', `Editar la columna ${name}`);
   editButton.addEventListener('click', () => handlers.onEditColumn(column));
 
-  const leftButton = button('← Mover a la izquierda', 'button button-small');
-  leftButton.disabled = isFirst;
-  leftButton.addEventListener('click', () => handlers.onMoveColumn(column, column.position - 1));
+  const duplicateButton = button('Duplicar', 'button button-small', `Duplicar la columna ${name}`);
+  duplicateButton.disabled = board.columns.length >= MAX_COLUMNS;
+  duplicateButton.addEventListener('click', () => handlers.onDuplicateColumn(column));
 
-  const rightButton = button('Mover a la derecha →', 'button button-small');
-  rightButton.disabled = isLast;
-  rightButton.addEventListener('click', () => handlers.onMoveColumn(column, column.position + 1));
-
-  items.append(editButton, leftButton, rightButton);
-
-  const others = board.columns.filter((other) => other.id !== column.id);
-  if (hasCards && others.length > 0) {
-    const group = el('div', 'move-all');
-    const label = el('label', '', 'Mover todas las tarjetas a');
-    const select = el('select');
-    for (const other of others) {
-      const option = el('option', '', other.name);
-      option.value = other.id;
-      select.append(option);
-    }
-    label.append(select);
-    const moveButton = button('Mover todas', 'button button-small');
-    moveButton.addEventListener('click', () => handlers.onMoveAllCards(column, select.value));
-    group.append(label, moveButton);
-    items.append(group);
-  }
-
-  const clearButton = button('Vaciar columna', 'button button-small button-danger');
-  clearButton.disabled = !hasCards;
-  clearButton.addEventListener('click', () => handlers.onClearColumn(column));
-
-  const deleteButton = button('Eliminar columna', 'button button-small button-danger');
+  const deleteButton = button('Eliminar', 'button button-small button-danger', `Eliminar la columna ${name}`);
   deleteButton.addEventListener('click', () => handlers.onDeleteColumn(column));
 
-  items.append(clearButton, deleteButton);
+  const clearButton = button('Vaciar', 'button button-small button-danger', `Vaciar la columna ${name}`);
+  clearButton.disabled = column.cards.length === 0;
+  clearButton.addEventListener('click', () => handlers.onClearColumn(column));
+
+  items.append(editButton, duplicateButton, deleteButton, clearButton);
   menu.append(items);
   return menu;
 }
@@ -155,13 +131,17 @@ function buildColumnHandle(column) {
 }
 
 function buildColumn(column, board, handlers) {
-  const isOverLimit = column.wipLimit !== null && column.cards.length > column.wipLimit;
-  const item = el('li', isOverLimit ? 'board-column over-limit' : 'board-column');
+  const item = el('li', 'board-column');
   item.dataset.columnId = column.id;
 
   const header = el('div', 'column-header');
-  header.append(buildColumnHandle(column), el('h3', 'column-title', column.name), buildColumnCount(column));
-  item.append(header, buildColumnMenu(column, board, handlers));
+  header.append(
+    buildColumnHandle(column),
+    el('h3', 'column-title', column.name),
+    buildColumnCount(column),
+    buildColumnMenu(column, board, handlers)
+  );
+  item.append(header);
 
   const list = el('ul', 'card-list');
   list.setAttribute('aria-label', `Tarjetas de «${column.name}»`);
@@ -169,7 +149,9 @@ function buildColumn(column, board, handlers) {
   if (column.cards.length === 0) list.append(el('li', 'card-list-empty', 'Sin tarjetas'));
   item.append(list);
 
-  const addButton = button('Añadir tarjeta', 'button add-card-button', `Añadir tarjeta a «${column.name}»`);
+  // Botón sin recuadro: un «+» a la izquierda y el texto. Cambia de color al pasar el ratón o con el foco.
+  const addButton = button('', 'add-task-button', `Añadir tarea a «${column.name}»`);
+  addButton.append(el('span', 'add-task-plus', '+'), 'Añadir Tarea');
   addButton.disabled = column.cards.length >= MAX_CARDS_PER_COLUMN;
   addButton.addEventListener('click', () => handlers.onAddCard(column));
   item.append(addButton);
@@ -177,11 +159,43 @@ function buildColumn(column, board, handlers) {
   return item;
 }
 
-// board: { columns: [columna con cards] }. handlers: funciones que reciben los clics
+// Hueco entre dos columnas. Con el ratón encima (o con el foco) muestra «Añadir sección», que
+// crea una columna nueva en esa posición. Si el tablero está lleno solo queda el hueco.
+function buildSectionGap(position, board, handlers) {
+  const gap = el('li', 'section-gap');
+  if (board.columns.length >= MAX_COLUMNS) return gap;
+  const addButton = button('Añadir sección', 'add-section-button', `Añadir una sección en la posición ${position + 1}`);
+  addButton.addEventListener('click', () => handlers.onAddSection(position));
+  gap.append(addButton);
+  return gap;
+}
+
+// Título y descripción del proyecto. No se pisa el campo que la persona está escribiendo.
+function setProjectField(id, value) {
+  const field = $(id);
+  if (document.activeElement !== field) field.value = value;
+}
+
+export function renderProject(project) {
+  setProjectField('project-name', project.name);
+  setProjectField('project-description', project.description);
+}
+
+export const readProject = () => ({
+  name: $('project-name').value,
+  description: $('project-description').value,
+});
+
+// board: { project, columns: [columna con cards] }. handlers: funciones que reciben los clics
 // (ver kanban.js). Se vuelve a pintar el tablero entero: es pequeño y así siempre
 // coincide con lo guardado.
 export function renderBoard(board, handlers) {
-  $('board').replaceChildren(...board.columns.map((column) => buildColumn(column, board, handlers)));
+  renderProject(board.project);
+  const items = board.columns.flatMap((column, index) => {
+    const built = buildColumn(column, board, handlers);
+    return index === 0 ? [built] : [buildSectionGap(index, board, handlers), built];
+  });
+  $('board').replaceChildren(...items);
 
   const columnCount = board.columns.length;
   const cardCount = board.columns.reduce((total, column) => total + column.cards.length, 0);
@@ -243,13 +257,8 @@ function showErrors(form, errorPrefix, fields, details = []) {
   return firstInvalid !== null;
 }
 
-// El límite WIP vacío significa "sin límite"; si no, se envía como número.
 function readColumnFields(form) {
-  const rawLimit = form.elements.wipLimit.value.trim();
-  return {
-    name: form.elements.name.value,
-    wipLimit: rawLimit === '' ? null : Number(rawLimit),
-  };
+  return { name: form.elements.name.value };
 }
 
 export const readColumnForm = () => readColumnFields($('column-form'));
@@ -269,7 +278,6 @@ export function openColumnDialog(column) {
   const form = $('column-edit-form');
   clearErrors(form, 'column-edit-error', COLUMN_FIELDS);
   form.elements.name.value = column.name;
-  form.elements.wipLimit.value = column.wipLimit === null ? '' : column.wipLimit;
   $('column-dialog').showModal();
   form.elements.name.focus();
 }

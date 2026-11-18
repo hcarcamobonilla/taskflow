@@ -7,6 +7,9 @@ import * as boardUi from './kanbanUi.js';
 import { enableDrag } from './kanbanDrag.js';
 import { toExport } from './store/kanbanRules.js';
 
+// Nombre provisional de una columna creada con «Añadir sección».
+const NEW_SECTION_NAME = 'Nueva sección';
+
 // Adaptador de almacenamiento; lo entrega main.js en init().
 let store = null;
 
@@ -22,8 +25,8 @@ let cardDialog = null; // { card } al editar, { column } al crear
 
 const handlers = {
   onEditColumn: handleEditColumn,
-  onMoveColumn: handleMoveColumn,
-  onMoveAllCards: handleMoveAllCards,
+  onDuplicateColumn: handleDuplicateColumn,
+  onAddSection: handleAddSection,
   onClearColumn: handleClearColumn,
   onDeleteColumn: handleDeleteColumn,
   onAddCard: handleAddCard,
@@ -113,9 +116,63 @@ async function handleMoveColumn(column, position) {
   boardUi.focusColumn(column.id);
 }
 
-async function handleMoveAllCards(column, targetColumnId) {
-  await applyChange(() => store.moveAllCards(column.id, targetColumnId), 'Tarjetas movidas.');
-  boardUi.focusColumn(column.id);
+async function handleDuplicateColumn(column) {
+  ui.clearMessage();
+  let copy;
+  try {
+    copy = await store.duplicateColumn(column.id);
+    ui.showMessage(`Columna «${column.name}» duplicada.`);
+  } catch (error) {
+    ui.showMessage(error.message, 'error');
+  }
+  await load();
+  if (copy) boardUi.focusColumn(copy.id);
+}
+
+// «Añadir sección»: crea una columna en esa posición y abre el diálogo para ponerle nombre.
+// Si se cancela el diálogo, la columna se queda con el nombre provisional.
+async function handleAddSection(position) {
+  ui.clearMessage();
+  let column;
+  try {
+    column = await store.createColumn({ name: NEW_SECTION_NAME, position });
+  } catch (error) {
+    ui.showMessage(error.message, 'error');
+  }
+  await load();
+  if (column) handleEditColumn(column);
+}
+
+/* ---------- Proyecto (título y descripción) ---------- */
+
+async function handleSaveProject() {
+  try {
+    await store.updateProject(boardUi.readProject());
+    ui.showMessage('Proyecto guardado.');
+  } catch (error) {
+    ui.showMessage(error.message, 'error');
+    await load(); // vuelve a mostrar lo que hay guardado
+  }
+}
+
+/* ---------- Menú de opciones de las columnas ---------- */
+
+// Cierra los menús abiertos al elegir una opción o al hacer clic fuera de ellos.
+function handleDocumentClick(event) {
+  const own = event.target.closest('.column-menu');
+  const choseOption = event.target.closest('.column-menu-items button');
+  for (const menu of document.querySelectorAll('.column-menu[open]')) {
+    if (menu !== own || choseOption) menu.open = false;
+  }
+}
+
+// Escape cierra el menú abierto y devuelve el foco a sus tres puntos.
+function handleDocumentKeydown(event) {
+  if (event.key !== 'Escape') return;
+  const menu = document.querySelector('.column-menu[open]');
+  if (!menu) return;
+  menu.open = false;
+  menu.querySelector('summary').focus();
 }
 
 async function handleClearColumn(column) {
@@ -219,6 +276,17 @@ export function init(selectedStore) {
   document.getElementById('column-cancel-button').addEventListener('click', boardUi.closeColumnDialog);
   document.getElementById('card-cancel-button').addEventListener('click', boardUi.closeCardDialog);
   document.getElementById('export-board-button').addEventListener('click', handleExport);
+
+  // `change` se dispara al salir del campo (o con Enter en el título) solo si el texto cambió.
+  const projectName = document.getElementById('project-name');
+  projectName.addEventListener('change', handleSaveProject);
+  projectName.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter') projectName.blur();
+  });
+  document.getElementById('project-description').addEventListener('change', handleSaveProject);
+
+  document.addEventListener('click', handleDocumentClick);
+  document.addEventListener('keydown', handleDocumentKeydown);
 
   enableDrag(document.getElementById('board'), { onDropCard: handleDropCard, onDropColumn: handleDropColumn });
 }

@@ -31,7 +31,8 @@ La interfaz, los formularios y los estilos son los mismos archivos en ambas vers
 - Cambio rápido de estado desde la lista.
 - Validación en el servidor y mensajes de error claros en la interfaz.
 - **Tablero Kanban** como segunda vista (ver "Tablero Kanban"): columnas y tarjetas
-  propias, reordenables con botones o arrastrando, con límite WIP opcional y exportación a JSON.
+  propias, reordenables arrastrando, con título y descripción del proyecto, sección nueva entre
+  columnas, duplicado de columnas y exportación a JSON.
   Funciona en la versión local y en la demo.
 
 ## Stack tecnológico
@@ -244,24 +245,29 @@ Los scripts de base de datos son idempotentes: pueden repetirse sin borrar datos
 ## Tablero Kanban
 
 Es una segunda vista, independiente de la lista: sus tarjetas **no** son las tareas de la lista
-ni se sincronizan con ellas (tablas propias `kanban_columns` y `kanban_cards`).
+ni se sincronizan con ellas (tablas propias `kanban_columns`, `kanban_cards` y `kanban_project`).
 
-- **Columnas**: se añaden con nombre (máx. 60 caracteres) y un límite WIP opcional (1 a 50).
-  Se pueden renombrar, mover a la izquierda o a la derecha, vaciar y eliminar (con confirmación; al eliminar una
-  columna se eliminan sus tarjetas). También se pueden pasar todas sus tarjetas a otra columna.
-- **Tarjetas**: título obligatorio (máx. 150), descripción (máx. 2000), prioridad y fecha límite
-  opcional. Se crean desde la columna, se editan y se eliminan con confirmación.
+- **Proyecto**: arriba del tablero, el título («Titular el nombre del proyecto») y una breve
+  descripción (máx. 100 y 300 caracteres) se escriben en el sitio y se guardan al salir del campo.
+- **Columnas**: se añaden con nombre (máx. 60 caracteres) desde el formulario (al final) o con el
+  botón **Añadir sección**, que aparece al pasar el ratón entre dos columnas y crea una columna
+  nueva en ese lugar (con el nombre provisional «Nueva sección» y el diálogo para cambiarlo).
+- **Menú de la columna**: los tres puntos (⋯) de la esquina superior derecha abren un recuadro
+  con **Editar** (nombre), **Duplicar** (copia la columna con sus tarjetas, a su derecha),
+  **Eliminar** (con confirmación; elimina también sus tarjetas) y **Vaciar** (elimina solo las
+  tarjetas, con confirmación). Se cierra al elegir una opción, al hacer clic fuera o con Escape.
+- **Tarjetas** (en pantalla «tareas»): título obligatorio (máx. 150), descripción (máx. 2000),
+  prioridad (arriba del título) y fecha límite opcional. Se crean con **+ Añadir Tarea**, se
+  editan (también la prioridad) y se eliminan con confirmación.
 - **Reordenar tarjetas**: se arrastran con el ratón, dentro de su columna o a otra columna; una
   línea azul indica dónde caerán.
-- **Reordenar columnas**: se arrastran con el asa ⠿ del encabezado. Los botones «Mover a la
-  izquierda/derecha» del menú «Opciones» de cada columna hacen lo mismo con teclado y lector de
-  pantalla.
-- **Límite WIP**: es un aviso ("Límite WIP superado"), no un bloqueo.
+- **Reordenar columnas**: se arrastran con el asa ⠿ del encabezado.
+- **Contador**: junto al nombre de cada columna, «| 3» en gris (el número de tarjetas).
 - **Topes**: máximo 8 columnas por tablero y 50 tarjetas por columna; al superarlos la API
   responde `409` y la demo muestra el mismo mensaje.
 - **Exportar a JSON**: descarga el tablero completo como archivo.
 - En la versión local, `npm run db:seed` crea un tablero de ejemplo ("Por hacer", "En curso"
-  con límite 2 y "Hecho") solo si el tablero no tiene ninguna columna. En la demo el tablero
+  y "Hecho") solo si el tablero no tiene ninguna columna. En la demo el tablero
   empieza vacío.
 
 ## Demo web (modo invitado)
@@ -400,14 +406,16 @@ final.
 
 | Método | Ruta | Descripción | Respuestas |
 |--------|------|-------------|------------|
-| GET | `/api/kanban` | Tablero completo: columnas en orden, cada una con sus tarjetas | 200 |
-| POST | `/api/kanban/columns` | Crea una columna al final (`name`, `wipLimit` opcional) | 201, 400, 409 |
-| PUT | `/api/kanban/columns/:id` | Cambia nombre y límite WIP | 200, 400, 404 |
+| GET | `/api/kanban` | Tablero completo: `project` (título y descripción) y las columnas en orden, cada una con sus tarjetas | 200 |
+| PUT | `/api/kanban/project` | Guarda el título y la descripción del proyecto (`name`, `description`; vacío = sin definir) | 200, 400 |
+| POST | `/api/kanban/columns` | Crea una columna (`name`; con `position` opcional se inserta ahí, si no va al final) | 201, 400, 409 |
+| POST | `/api/kanban/columns/:id/duplicate` | Copia la columna y sus tarjetas justo a su derecha; devuelve la copia | 201, 400, 404, 409 |
+| PUT | `/api/kanban/columns/:id` | Cambia el nombre | 200, 400, 404 |
 | PATCH | `/api/kanban/columns/:id/move` | Mueve la columna a `position`; devuelve el tablero | 200, 400, 404 |
 | DELETE | `/api/kanban/columns/:id` | Elimina la columna y sus tarjetas | 204, 400, 404 |
 | POST | `/api/kanban/columns/:id/cards` | Crea una tarjeta al final de la columna | 201, 400, 404, 409 |
 | DELETE | `/api/kanban/columns/:id/cards` | Vacía la columna (elimina sus tarjetas) | 204, 400, 404 |
-| POST | `/api/kanban/columns/:id/move-cards` | Pasa todas sus tarjetas a `targetColumnId`; devuelve el tablero | 200, 400, 404, 409 |
+| POST | `/api/kanban/columns/:id/move-cards` | Pasa todas sus tarjetas a `targetColumnId`; devuelve el tablero (la interfaz ya no usa este endpoint) | 200, 400, 404, 409 |
 | PUT | `/api/kanban/cards/:id` | Reemplaza título, descripción, prioridad y fecha | 200, 400, 404 |
 | PATCH | `/api/kanban/cards/:id/move` | Mueve la tarjeta a `columnId` y `position` (opcional) | 200, 400, 404, 409 |
 | DELETE | `/api/kanban/cards/:id` | Elimina la tarjeta | 204, 400, 404 |
@@ -430,7 +438,7 @@ curl -X PATCH http://localhost:3000/api/kanban/cards/1/move \
 npm test
 ```
 
-Requiere PostgreSQL en marcha y haber ejecutado `npm run db:setup`. Hay 138 pruebas:
+Requiere PostgreSQL en marcha y haber ejecutado `npm run db:setup`. Hay 159 pruebas:
 
 - `tests/validator.test.js`: pruebas unitarias de validación (sin base de datos).
 - `tests/tasks.api.test.js`: pruebas de integración reales. Envían peticiones HTTP a la
@@ -447,6 +455,7 @@ Requiere PostgreSQL en marcha y haber ejecutado `npm run db:setup`. Hay 138 prue
   adaptador de `sessionStorage`, y exige resultados idénticos (datos, orden, recuentos y
   mensajes de error). Incluye casos del tablero Kanban.
 - `tests/kanban.validator.test.js`: pruebas unitarias de las reglas del tablero (sin base de datos).
+- `tests/drop-position.test.js`: el cálculo de la posición al soltar (el arrastre en sí no tiene prueba automática).
 - `tests/kanban.api.test.js`: integración real contra PostgreSQL: CRUD de columnas y tarjetas,
   reordenación y renumeración de posiciones, movimiento entre columnas, topes (`409`), ids
   inexistentes y que una operación fallida no deje cambios a medias (transacciones).
@@ -467,10 +476,17 @@ Las pruebas no tocan la base de desarrollo `taskflow`.
   avisa si dejan de coincidir.
 - Las tarjetas del Kanban son independientes de las tareas de la lista: mover una tarjeta no
   cambia el estado de ninguna tarea.
-- Kanban: sin edición simultánea (un solo usuario); las columnas
-  se pueden mover con el menú «Opciones» (teclado, lector de pantalla y pantallas táctiles), pero
-  las tarjetas solo se mueven arrastrándolas: el arrastre está pensado para el ratón y no se ha
-  probado en pantallas táctiles, donde las tarjetas no se pueden reordenar.
+- Kanban: sin edición simultánea (un solo usuario). Las tarjetas y las columnas solo se mueven
+  arrastrándolas con el ratón: no hay alternativa con teclado ni lector de pantalla, y el arrastre
+  no se ha probado en pantallas táctiles (allí no se pueden reordenar). «Añadir sección» aparece al
+  pasar el ratón (o con el foco del teclado), así que en pantallas táctiles solo queda el
+  formulario, que añade al final.
+- Kanban: el límite WIP se eliminó. En una base creada antes, la columna `wip_limit` de
+  `kanban_columns` queda sin usar (la aplicación la ignora); se puede borrar a mano con
+  `ALTER TABLE kanban_columns DROP COLUMN wip_limit;`. Tras actualizar, ejecuta `npm run db:setup`
+  para crear la tabla `kanban_project`.
+- Un tablero de la demo guardado antes de existir título y descripción del proyecto se lee con
+  ambos vacíos.
 - Sin paginación: la lista devuelve todas las tareas que cumplen los filtros.
 - No hay pruebas automatizadas de interfaz en un navegador real. Durante el desarrollo los dos
   modos se verificaron ejecutando sus módulos sobre un DOM simulado (jsdom); esa comprobación

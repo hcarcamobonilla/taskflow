@@ -191,9 +191,19 @@
         <h2 id="kanban-heading" tabindex="-1">Tablero Kanban</h2>
         <button type="button" id="export-board-button" class="button">Exportar a JSON</button>
       </div>
+      <div class="project-info">
+        <label for="project-name" class="visually-hidden">Título del proyecto</label>
+        <input type="text" id="project-name" class="project-name" maxlength="100" autocomplete="off"
+               placeholder="Titular el nombre del proyecto">
+        <label for="project-description" class="visually-hidden">Descripción breve del proyecto</label>
+        <textarea id="project-description" class="project-description" rows="2" maxlength="300"
+                  placeholder="Añadir una breve descripción del proyecto"></textarea>
+      </div>
+
       <p class="kanban-help">
-        Crea tus columnas y añade tarjetas. Para mover una tarjeta, arrástrala con el ratón o usa
-        sus botones de flecha. Las tarjetas del tablero son independientes de las tareas de la lista.
+        Crea tus columnas y añade tareas. Arrastra una tarea para moverla y una columna por el asa ⠿
+        para reordenarla. Pasa el ratón entre dos columnas para añadir una sección nueva. Las tareas
+        del tablero son independientes de las tareas de la lista.
       </p>
 
       <form id="column-form" class="column-form" novalidate>
@@ -202,13 +212,6 @@
           <input type="text" id="column-name" name="name" required maxlength="60"
                  autocomplete="off" aria-describedby="column-error-name">
           <p class="field-error" id="column-error-name"></p>
-        </div>
-        <div class="field">
-          <label for="column-wip">Límite WIP (opcional)</label>
-          <input type="number" id="column-wip" name="wipLimit" min="1" max="50" step="1"
-                 inputmode="numeric" aria-describedby="column-wip-help column-error-wipLimit">
-          <p class="field-help" id="column-wip-help">Máximo recomendado de tarjetas a la vez.</p>
-          <p class="field-error" id="column-error-wipLimit"></p>
         </div>
         <div class="field field-button">
           <button type="submit" id="add-column-button" class="button button-primary">Añadir columna</button>
@@ -260,7 +263,7 @@
       </form>
     </dialog>
 
-    <!-- Diálogo para cambiar el nombre y el límite WIP de una columna. -->
+    <!-- Diálogo para cambiar el nombre de una columna. -->
     <dialog id="column-dialog" class="dialog" aria-labelledby="column-dialog-heading">
       <form id="column-edit-form" novalidate>
         <h2 id="column-dialog-heading">Editar columna</h2>
@@ -271,12 +274,6 @@
           <input type="text" id="column-edit-name" name="name" required maxlength="60"
                  autocomplete="off" aria-describedby="column-edit-error-name">
           <p class="field-error" id="column-edit-error-name"></p>
-        </div>
-        <div class="field">
-          <label for="column-edit-wip">Límite WIP (vacío = sin límite)</label>
-          <input type="number" id="column-edit-wip" name="wipLimit" min="1" max="50" step="1"
-                 inputmode="numeric" aria-describedby="column-edit-error-wipLimit">
-          <p class="field-error" id="column-edit-error-wipLimit"></p>
         </div>
 
         <div class="form-actions">
