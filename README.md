@@ -272,8 +272,9 @@ ni se sincronizan con ellas (tablas propias `kanban_columns`, `kanban_cards` y `
   de columna.
 - **Reordenar columnas**: se arrastran con el asa ⠿ del encabezado.
 - **Contadores**: junto al nombre de cada columna, «| 3» en gris (sus tareas pendientes). En el
-  pie del recuadro del proyecto, a la izquierda «x columnas y z tareas» (pendientes) y a la
-  derecha «j tareas completadas».
+  pie del recuadro del proyecto, a la izquierda «x Columnas | z Tareas» (pendientes) y a la
+  derecha «j Tareas Completadas». Una tarea cuya fecha límite es hoy muestra esa fecha en rojo
+  oscuro (y «vence hoy» para lectores de pantalla).
 - **Topes**: máximo 8 columnas por tablero y 50 tarjetas por columna; al superarlos la API
   responde `409` y la demo muestra el mismo mensaje.
 - **Exportar a JSON**: descarga el tablero completo como archivo.

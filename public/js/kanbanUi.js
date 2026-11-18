@@ -85,12 +85,15 @@ function buildCard(card, board, handlers) {
   if (card.description) body.append(el('p', 'card-description', card.description));
 
   if (card.dueDate) {
-    const meta = el('p', 'card-meta');
+    const today = todayIso();
+    const meta = el('p', card.dueDate === today ? 'card-meta card-meta-today' : 'card-meta');
     const due = el('span', '', 'Fecha límite: ');
     const time = el('time', '', formatDate(card.dueDate));
     time.dateTime = card.dueDate;
     due.append(time);
-    if (card.dueDate < todayIso()) due.append(' ', el('strong', 'overdue', '(vencida)'));
+    if (card.dueDate < today) due.append(' ', el('strong', 'overdue', '(vencida)'));
+    // El rojo oscuro no debe ser la única pista: un lector de pantalla oye «vence hoy».
+    if (card.dueDate === today) due.append(el('span', 'visually-hidden', ' (vence hoy)'));
     meta.append(due);
     body.append(meta);
   }
@@ -192,7 +195,7 @@ function setProjectField(id, value) {
 export function renderProject(project) {
   setProjectField('project-name', project.name);
   setProjectField('project-description', project.description);
-  $('completed-count').textContent = plural(project.completedCount, 'tarea completada', 'tareas completadas');
+  $('completed-count').textContent = plural(project.completedCount, 'Tarea Completada', 'Tareas Completadas');
 }
 
 export const readProject = () => ({
@@ -219,8 +222,8 @@ export function renderBoard(board, handlers) {
   if (columnCount === 0) {
     setBoardStatus('El tablero todavía no tiene columnas. Crea la primera con el formulario.');
   } else {
-    const summary = `${plural(columnCount, 'columna', 'columnas')} y ${plural(cardCount, 'tarea', 'tareas')}.`;
-    setBoardStatus(isFull ? `${summary} Has llegado al máximo de ${MAX_COLUMNS} columnas.` : summary);
+    const summary = `${plural(columnCount, 'Columna', 'Columnas')} | ${plural(cardCount, 'Tarea', 'Tareas')}`;
+    setBoardStatus(isFull ? `${summary} (máximo de ${MAX_COLUMNS} columnas)` : summary);
   }
 }
 

@@ -18,6 +18,7 @@
   --color-in-progress: #1e40af;
   --color-completed: #166534;
   --radius: 8px;
+  --color-due-today: #8b1a1a;
   --priority-high: #c62828;
   --priority-medium: #c2570c;
   --priority-low: #1d4ed8;
@@ -517,14 +518,9 @@ textarea {
   margin-bottom: 0;
 }
 
-.kanban-help,
 .field-help {
   color: var(--color-muted);
   font-size: 0.9rem;
-}
-
-.kanban-help {
-  margin-bottom: 1rem;
 }
 
 /* Título y descripción del proyecto: se editan en el sitio, sin recuadro hasta que se usan. */
@@ -546,7 +542,7 @@ textarea {
 }
 
 .project-name {
-  font-size: 1.5rem;
+  font-size: calc(1.5rem + 1pt); /* un punto más grande */
   font-weight: 700;
 }
 
@@ -791,6 +787,12 @@ textarea {
   overflow-wrap: anywhere;
 }
 
+
+/* Fecha límite que vence hoy: letras en rojo oscuro. */
+.card-meta-today {
+  color: var(--color-due-today);
+  font-weight: 600;
+}
 
 .card-meta {
   display: flex;
