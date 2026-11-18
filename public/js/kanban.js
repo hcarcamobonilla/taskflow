@@ -30,7 +30,7 @@ const handlers = {
   onClearColumn: handleClearColumn,
   onDeleteColumn: handleDeleteColumn,
   onAddCard: handleAddCard,
-  onToggleCard: handleToggleCard,
+  onCompleteCard: handleCompleteCard,
   onEditCard: handleEditCard,
   onDuplicateCard: handleDuplicateCard,
   onMoveCardTo: handleOpenMoveDialog,
@@ -180,7 +180,7 @@ function handleDocumentKeydown(event) {
 
 async function handleClearColumn(column) {
   const confirmed = window.confirm(
-    `¿Vaciar la columna «${column.name}»? Se eliminarán sus ${column.cards.length} tarjetas y no podrás recuperarlas.`
+    `¿Vaciar la columna «${column.name}»? Se eliminarán sus ${column.cards.length} tareas y no podrás recuperarlas.`
   );
   if (!confirmed) return;
   await applyChange(() => store.clearColumn(column.id), `Columna «${column.name}» vaciada.`);
@@ -188,7 +188,7 @@ async function handleClearColumn(column) {
 }
 
 async function handleDeleteColumn(column) {
-  const cardsWarning = column.cards.length > 0 ? ` Se eliminarán también sus ${column.cards.length} tarjetas.` : '';
+  const cardsWarning = column.cards.length > 0 ? ` Se eliminarán también sus ${column.cards.length} tareas.` : '';
   const confirmed = window.confirm(
     `¿Eliminar la columna «${column.name}»?${cardsWarning} Esta acción no se puede deshacer.`
   );
@@ -197,7 +197,7 @@ async function handleDeleteColumn(column) {
   boardUi.focusBoardHeading();
 }
 
-/* ---------- Tarjetas ---------- */
+/* ---------- Tareas (tarjetas del tablero) ---------- */
 
 function handleAddCard(column) {
   cardDialog = { column };
@@ -224,15 +224,15 @@ async function handleSubmitCardDialog(event) {
     return;
   }
   boardUi.closeCardDialog();
-  ui.showMessage(card ? 'Cambios guardados correctamente.' : 'Tarjeta creada correctamente.');
+  ui.showMessage(card ? 'Cambios guardados correctamente.' : 'Tarea creada correctamente.');
   await load();
   boardUi.focusCard(saved.id, 'menu');
 }
 
-// Círculo de la tarea: la marca como completada o la deja pendiente.
-async function handleToggleCard(card) {
-  await applyChange(() => store.setCardCompleted(card.id, !card.completed));
-  boardUi.focusCard(card.id, 'complete');
+// Círculo de la tarea: la completa. La tarea se elimina y se suma al contador de completadas.
+async function handleCompleteCard(card) {
+  await applyChange(() => store.completeCard(card.id), `Tarea «${card.title}» completada.`);
+  boardUi.focusColumn(card.columnId);
 }
 
 async function handleDuplicateCard(card) {
@@ -267,9 +267,9 @@ async function handleSubmitMoveDialog(event) {
 }
 
 async function handleDeleteCard(card) {
-  const confirmed = window.confirm(`¿Eliminar la tarjeta «${card.title}»? Esta acción no se puede deshacer.`);
+  const confirmed = window.confirm(`¿Eliminar la tarea «${card.title}»? Esta acción no se puede deshacer.`);
   if (!confirmed) return;
-  await applyChange(() => store.deleteCard(card.id), 'Tarjeta eliminada.');
+  await applyChange(() => store.deleteCard(card.id), 'Tarea eliminada.');
   boardUi.focusColumn(card.columnId);
 }
 

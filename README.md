@@ -258,18 +258,22 @@ ni se sincronizan con ellas (tablas propias `kanban_columns`, `kanban_cards` y `
   **Eliminar** (con confirmación; elimina también sus tarjetas) y **Vaciar** (elimina solo las
   tarjetas, con confirmación). Se cierra al elegir una opción, al hacer clic fuera o con Escape.
 - **Tarjetas** (en pantalla «tareas»): título obligatorio (máx. 150), descripción (máx. 2000),
-  prioridad (arriba del título) y fecha límite opcional. Se crean con **+ Añadir Tarea**.
-  El **círculo** de arriba a la izquierda las marca como completadas (título tachado) o las deja
-  pendientes.
+  prioridad y fecha límite opcional. Se crean con **+ Añadir Tarea**. La prioridad no lleva
+  etiqueta: la indica el color del **círculo** de arriba a la izquierda (rojo = alta,
+  naranja = media, azul = baja; también está en su texto accesible y al pasar el ratón).
+- **Completar una tarea**: al pulsar el círculo la tarea **se elimina** (sin confirmación y sin
+  deshacer) y se suma al contador de completadas, que se guarda con el proyecto.
 - **Menú de la tarea**: los tres puntos (⋯) de la esquina superior derecha abren un recuadro con
-  **Editar** (también la prioridad), **Duplicar** (copia la tarea con su estado justo debajo),
+  **Editar** (también la prioridad), **Duplicar** (copia la tarea justo debajo),
   **Mover** (la pasa al final de otra columna que se elige en un diálogo) y **Eliminar** (con
   confirmación).
 - **Reordenar tarjetas**: se arrastran con el ratón, dentro de su columna o a otra columna; una
   línea azul indica dónde caerán. «Mover» del menú es la alternativa sin arrastrar para cambiar
   de columna.
 - **Reordenar columnas**: se arrastran con el asa ⠿ del encabezado.
-- **Contador**: junto al nombre de cada columna, «| 3» en gris (el número de tarjetas).
+- **Contadores**: junto al nombre de cada columna, «| 3» en gris (sus tareas pendientes). En el
+  pie del recuadro del proyecto, a la izquierda «x columnas y z tareas» (pendientes) y a la
+  derecha «j tareas completadas».
 - **Topes**: máximo 8 columnas por tablero y 50 tarjetas por columna; al superarlos la API
   responde `409` y la demo muestra el mismo mensaje.
 - **Exportar a JSON**: descarga el tablero completo como archivo.
@@ -424,7 +428,7 @@ final.
 | DELETE | `/api/kanban/columns/:id/cards` | Vacía la columna (elimina sus tarjetas) | 204, 400, 404 |
 | POST | `/api/kanban/columns/:id/move-cards` | Pasa todas sus tarjetas a `targetColumnId`; devuelve el tablero (la interfaz ya no usa este endpoint) | 200, 400, 404, 409 |
 | PUT | `/api/kanban/cards/:id` | Reemplaza título, descripción, prioridad y fecha | 200, 400, 404 |
-| PATCH | `/api/kanban/cards/:id/completed` | Marca o desmarca la tarjeta como completada (`completed`: `true` o `false`) | 200, 400, 404 |
+| POST | `/api/kanban/cards/:id/complete` | Completa la tarea: la elimina, renumera su columna y suma 1 al contador; devuelve el proyecto | 200, 400, 404 |
 | POST | `/api/kanban/cards/:id/duplicate` | Copia la tarjeta (con su estado) justo debajo; devuelve la copia | 201, 400, 404, 409 |
 | PATCH | `/api/kanban/cards/:id/move` | Mueve la tarjeta a `columnId` y `position` (opcional) | 200, 400, 404, 409 |
 | DELETE | `/api/kanban/cards/:id` | Elimina la tarjeta | 204, 400, 404 |
@@ -447,7 +451,7 @@ curl -X PATCH http://localhost:3000/api/kanban/cards/1/move \
 npm test
 ```
 
-Requiere PostgreSQL en marcha y haber ejecutado `npm run db:setup`. Hay 171 pruebas:
+Requiere PostgreSQL en marcha y haber ejecutado `npm run db:setup`. Hay 172 pruebas:
 
 - `tests/validator.test.js`: pruebas unitarias de validación (sin base de datos).
 - `tests/tasks.api.test.js`: pruebas de integración reales. Envían peticiones HTTP a la
@@ -494,9 +498,12 @@ Las pruebas no tocan la base de desarrollo `taskflow`.
 - Kanban: el límite WIP se eliminó. En una base creada antes, la columna `wip_limit` de
   `kanban_columns` queda sin usar (la aplicación la ignora); se puede borrar a mano con
   `ALTER TABLE kanban_columns DROP COLUMN wip_limit;`. Tras actualizar, ejecuta `npm run db:setup`
-  para crear la tabla `kanban_project`.
+  para crear la tabla `kanban_project` (y su columna `completed_count`). Igualmente, si probaste
+  una versión anterior con tareas «marcadas», la columna `completed` de `kanban_cards` queda
+  sin usar (`ALTER TABLE kanban_cards DROP COLUMN completed;` la borra).
 - Un tablero de la demo guardado antes de existir título y descripción del proyecto se lee con
-  ambos vacíos.
+  ambos vacíos y el contador de completadas en 0.
+- Completar una tarea es definitivo: no hay deshacer ni papelera, y el contador solo sube.
 - Sin paginación: la lista devuelve todas las tareas que cumplen los filtros.
 - No hay pruebas automatizadas de interfaz en un navegador real. Durante el desarrollo los dos
   modos se verificaron ejecutando sus módulos sobre un DOM simulado (jsdom); esa comprobación

@@ -41,7 +41,7 @@
         </button>
         <button type="button" class="view-option" data-view="kanban">
           <strong>Tablero Kanban</strong>
-          <span>Columnas que defines tú y tarjetas que mueves de una columna a otra.</span>
+          <span>Columnas que defines tú y tareas que mueves de una columna a otra.</span>
         </button>
       </div>
     </section>
@@ -218,15 +218,19 @@
         </div>
       </form>
 
-      <p id="board-status" class="list-status" role="status" aria-live="polite">Cargando tablero…</p>
+      <!-- Pie del recuadro: columnas y tareas pendientes a la izquierda, tareas completadas a la derecha. -->
+      <div class="board-summary">
+        <p id="board-status" class="list-status" role="status" aria-live="polite">Cargando tablero…</p>
+        <p id="completed-count" class="completed-count"></p>
+      </div>
     </section>
 
     <ol id="board" class="board" aria-label="Columnas del tablero"></ol>
 
-    <!-- Diálogo para crear o editar una tarjeta. -->
+    <!-- Diálogo para crear o editar una tarea. -->
     <dialog id="card-dialog" class="dialog" aria-labelledby="card-dialog-heading">
       <form id="card-form" novalidate>
-        <h2 id="card-dialog-heading">Nueva tarjeta</h2>
+        <h2 id="card-dialog-heading">Nueva tarea</h2>
         <p id="card-dialog-message" class="message message-error" role="alert" hidden></p>
 
         <div class="field">
@@ -257,7 +261,7 @@
         </div>
 
         <div class="form-actions">
-          <button type="submit" id="card-submit-button" class="button button-primary">Crear tarjeta</button>
+          <button type="submit" id="card-submit-button" class="button button-primary">Crear tarea</button>
           <button type="button" id="card-cancel-button" class="button">Cancelar</button>
         </div>
       </form>

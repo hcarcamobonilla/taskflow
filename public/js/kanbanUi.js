@@ -34,6 +34,7 @@ export function clearBoard() {
   $('board').replaceChildren();
   $('project-name').value = '';
   $('project-description').value = '';
+  $('completed-count').textContent = '';
   setBoardStatus('');
   resetColumnForm();
 }
@@ -63,25 +64,24 @@ function buildOptionsMenu(menuLabel, options) {
 }
 
 function buildCard(card, board, handlers) {
-  const item = el('li', card.completed ? 'card card-completed' : 'card');
+  const item = el('li', 'card');
   item.dataset.cardId = card.id;
   item.draggable = true;
   item.tabIndex = -1; // permite devolverle el foco después de volver a pintar el tablero
 
   const title = `«${card.title}»`;
 
-  // Círculo arriba a la izquierda: marca la tarea como completada (o la desmarca).
-  const check = button('', 'card-check', card.completed ? `Marcar ${title} como pendiente` : `Marcar ${title} como completada`);
-  check.dataset.action = 'complete';
-  check.setAttribute('aria-pressed', String(card.completed));
+  // Círculo arriba a la izquierda: completa la tarea (se elimina y suma al contador). Su color
+  // indica la prioridad; también va en el texto del botón para no depender solo del color.
+  const priorityName = PRIORITY_LABELS[card.priority].toLowerCase();
+  const check = button('', `card-check card-check-${card.priority}`, `Completar la tarea ${title} (prioridad ${priorityName})`);
+  check.title = `Prioridad ${priorityName}`;
   check.append(el('span', 'card-check-mark', '✓'));
-  check.addEventListener('click', () => handlers.onToggleCard(card));
+  check.addEventListener('click', () => handlers.onCompleteCard(card));
 
-  // La prioridad va arriba del título, alineada a la izquierda.
+  // El título va arriba; la prioridad ya no lleva etiqueta.
   const body = el('div', 'card-body');
-  const priority = el('p', 'card-priority');
-  priority.append(el('span', `badge badge-priority-${card.priority}`, `Prioridad ${PRIORITY_LABELS[card.priority].toLowerCase()}`));
-  body.append(priority, el('h4', 'card-title', card.title));
+  body.append(el('h4', 'card-title', card.title));
   if (card.description) body.append(el('p', 'card-description', card.description));
 
   if (card.dueDate) {
@@ -115,7 +115,7 @@ function buildColumnCount(column) {
   const node = el('span', 'column-count');
   const separator = el('span', '', '|');
   separator.setAttribute('aria-hidden', 'true');
-  node.append(separator, ' ', String(column.cards.length), el('span', 'visually-hidden', ' tarjetas'));
+  node.append(separator, ' ', String(column.cards.length), el('span', 'visually-hidden', ' tareas'));
   return node;
 }
 
@@ -155,9 +155,9 @@ function buildColumn(column, board, handlers) {
   item.append(header);
 
   const list = el('ul', 'card-list');
-  list.setAttribute('aria-label', `Tarjetas de «${column.name}»`);
+  list.setAttribute('aria-label', `Tareas de «${column.name}»`);
   list.append(...column.cards.map((card) => buildCard(card, board, handlers)));
-  if (column.cards.length === 0) list.append(el('li', 'card-list-empty', 'Sin tarjetas'));
+  if (column.cards.length === 0) list.append(el('li', 'card-list-empty', 'Sin tareas'));
   item.append(list);
 
   // Botón sin recuadro: un «+» a la izquierda y el texto. Cambia de color al pasar el ratón o con el foco.
@@ -192,6 +192,7 @@ function setProjectField(id, value) {
 export function renderProject(project) {
   setProjectField('project-name', project.name);
   setProjectField('project-description', project.description);
+  $('completed-count').textContent = plural(project.completedCount, 'tarea completada', 'tareas completadas');
 }
 
 export const readProject = () => ({
@@ -218,7 +219,7 @@ export function renderBoard(board, handlers) {
   if (columnCount === 0) {
     setBoardStatus('El tablero todavía no tiene columnas. Crea la primera con el formulario.');
   } else {
-    const summary = `${plural(columnCount, 'columna', 'columnas')} y ${plural(cardCount, 'tarjeta', 'tarjetas')}.`;
+    const summary = `${plural(columnCount, 'columna', 'columnas')} y ${plural(cardCount, 'tarea', 'tareas')}.`;
     setBoardStatus(isFull ? `${summary} Has llegado al máximo de ${MAX_COLUMNS} columnas.` : summary);
   }
 }
@@ -311,8 +312,8 @@ export function openCardDialog(card, columnName) {
     form.elements.priority.value = card.priority;
     form.elements.dueDate.value = card.dueDate || '';
   }
-  $('card-dialog-heading').textContent = card ? 'Editar tarjeta' : `Nueva tarjeta en «${columnName}»`;
-  $('card-submit-button').textContent = card ? 'Guardar cambios' : 'Crear tarjeta';
+  $('card-dialog-heading').textContent = card ? 'Editar tarea' : `Nueva tarea en «${columnName}»`;
+  $('card-submit-button').textContent = card ? 'Guardar cambios' : 'Crear tarea';
   $('card-dialog').showModal();
   form.elements.title.focus();
 }

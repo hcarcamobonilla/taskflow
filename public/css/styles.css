@@ -18,6 +18,9 @@
   --color-in-progress: #1e40af;
   --color-completed: #166534;
   --radius: 8px;
+  --priority-high: #c62828;
+  --priority-medium: #c2570c;
+  --priority-low: #1d4ed8;
 }
 
 *,
@@ -485,6 +488,22 @@ textarea {
 
 /* ---------- Tablero Kanban ---------- */
 
+/* Pie del recuadro: columnas y tareas pendientes (izquierda) y completadas (derecha). */
+.board-summary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.25rem 1rem;
+}
+
+.completed-count {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 0.9rem;
+  white-space: nowrap;
+}
+
 .kanban-header {
   display: flex;
   flex-wrap: wrap;
@@ -714,15 +733,17 @@ textarea {
   min-width: 0;
 }
 
-/* Círculo para marcar la tarea como completada (arriba a la izquierda). */
+/* Círculo para completar la tarea (arriba a la izquierda). El color indica la prioridad:
+   rojo = alta, naranja = media, azul = baja. */
 .card-check {
+  --check-color: var(--color-muted);
   display: grid;
   place-items: center;
   flex: 0 0 auto;
   width: 1.5rem;
   height: 1.5rem;
   padding: 0;
-  border: 2px solid var(--color-muted);
+  border: 2px solid var(--check-color);
   border-radius: 50%;
   background: transparent;
   color: transparent;
@@ -731,21 +752,21 @@ textarea {
   cursor: pointer;
 }
 
+.card-check-high {
+  --check-color: var(--priority-high);
+}
+
+.card-check-medium {
+  --check-color: var(--priority-medium);
+}
+
+.card-check-low {
+  --check-color: var(--priority-low);
+}
+
 .card-check:hover {
-  border-color: var(--color-completed);
-  color: var(--color-completed);
-}
-
-.card-check[aria-pressed="true"] {
-  border-color: var(--color-completed);
-  background: var(--color-completed);
-  color: #fff;
-}
-
-.card-completed .card-title,
-.card-completed .card-description {
-  color: var(--color-muted);
-  text-decoration: line-through;
+  background: color-mix(in srgb, var(--check-color) 15%, transparent);
+  color: var(--check-color);
 }
 
 .card.dragging {
@@ -770,9 +791,6 @@ textarea {
   overflow-wrap: anywhere;
 }
 
-.card-priority {
-  justify-self: start;
-}
 
 .card-meta {
   display: flex;
@@ -864,8 +882,10 @@ textarea {
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
-  padding: 0.125rem 0.5rem;
-  background: var(--color-bg);
+  padding: 0.25rem 0.75rem;
+  border: 1px solid var(--color-primary);
+  border-radius: var(--radius);
+  background: var(--color-surface);
   color: var(--color-primary);
   font-size: 0.95rem;
   font-weight: 700;
