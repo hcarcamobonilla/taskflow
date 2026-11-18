@@ -51,9 +51,13 @@ CREATE TABLE IF NOT EXISTS kanban_cards (
               CHECK (priority IN ('low', 'medium', 'high')),
   due_date    DATE,
   position    INTEGER NOT NULL CHECK (position >= 0),
+  completed   BOOLEAN NOT NULL DEFAULT false,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Para bases creadas antes de que existiera «completada» (no hace nada si la columna ya está).
+ALTER TABLE kanban_cards ADD COLUMN IF NOT EXISTS completed BOOLEAN NOT NULL DEFAULT false;
 
 CREATE INDEX IF NOT EXISTS idx_kanban_cards_column ON kanban_cards (column_id, position);
 

@@ -68,7 +68,7 @@ describe('GET /api/kanban', () => {
     const [, cardB] = board.columns[0].cards;
     assert.deepEqual(
       { ...cardB, createdAt: undefined, updatedAt: undefined },
-      { id: 2, columnId: todo.id, title: 'B', description: 'Detalle', priority: 'high', dueDate: '2026-12-01', position: 1, createdAt: undefined, updatedAt: undefined }
+      { id: 2, columnId: todo.id, title: 'B', description: 'Detalle', priority: 'high', dueDate: '2026-12-01', completed: false, position: 1, createdAt: undefined, updatedAt: undefined }
     );
     assert.ok(!Number.isNaN(Date.parse(cardB.createdAt)));
   });
@@ -436,5 +436,82 @@ describe('proyecto (título y descripción del tablero)', () => {
     assert.equal(res.status, 400);
     res = await request(app).put('/api/kanban/project').send([]);
     assert.equal(res.status, 400);
+  });
+});
+
+describe('tarjetas: completar y duplicar', () => {
+  test('PATCH completed marca y desmarca la tarjeta, la guarda y no cambia nada más', async () => {
+    const column = await addColumn('A');
+    const card = await addCard(column.id, 'Tarea', { priority: 'high' });
+    assert.equal(card.completed, false);
+
+    let res = await request(app).patch(`/api/kanban/cards/${card.id}/completed`).send({ completed: true });
+    assert.equal(res.status, 200);
+    assert.deepEqual([res.body.data.completed, res.body.data.title, res.body.data.priority, res.body.data.position], [true, 'Tarea', 'high', 0]);
+    const { rows } = await pool.query('SELECT completed FROM kanban_cards');
+    assert.deepEqual(rows, [{ completed: true }]);
+
+    res = await request(app).patch(`/api/kanban/cards/${card.id}/completed`).send({ completed: false });
+    assert.equal(res.body.data.completed, false);
+  });
+
+  test('PUT (editar) no cambia si la tarjeta está completada', async () => {
+    const column = await addColumn('A');
+    const card = await addCard(column.id, 'Tarea');
+    await request(app).patch(`/api/kanban/cards/${card.id}/completed`).send({ completed: true });
+    const res = await request(app).put(`/api/kanban/cards/${card.id}`).send({ title: 'Editada' });
+    assert.deepEqual([res.body.data.title, res.body.data.completed], ['Editada', true]);
+  });
+
+  test('PATCH completed rechaza valores que no son booleanos (400) y ids inexistentes (404)', async () => {
+    const column = await addColumn('A');
+    const card = await addCard(column.id, 'Tarea');
+    for (const body of [{}, { completed: 'true' }, { completed: 1 }, { completed: null }]) {
+      const res = await request(app).patch(`/api/kanban/cards/${card.id}/completed`).send(body);
+      assert.equal(res.status, 400);
+      assert.deepEqual(res.body.error.details.map((d) => d.field), ['completed']);
+    }
+    assert.equal((await request(app).patch('/api/kanban/cards/999/completed').send({ completed: true })).status, 404);
+    assert.equal((await request(app).patch('/api/kanban/cards/abc/completed').send({ completed: true })).status, 400);
+  });
+
+  test('POST duplicate copia la tarjeta (con su estado) justo debajo de la original', async () => {
+    const column = await addColumn('A');
+    const first = await addCard(column.id, 'Primera', { priority: 'high', dueDate: '2026-12-01', description: 'Detalle' });
+    await addCard(column.id, 'Segunda');
+    await request(app).patch(`/api/kanban/cards/${first.id}/completed`).send({ completed: true });
+
+    const res = await request(app).post(`/api/kanban/cards/${first.id}/duplicate`);
+    assert.equal(res.status, 201);
+    assert.notEqual(res.body.data.id, first.id);
+    assert.deepEqual(
+      [res.body.data.title, res.body.data.priority, res.body.data.dueDate, res.body.data.description, res.body.data.completed, res.body.data.position, res.body.data.columnId],
+      ['Primera', 'high', '2026-12-01', 'Detalle', true, 1, column.id]
+    );
+    assert.deepEqual((await getBoard()).columns[0].cards.map((c) => [c.title, c.position]), [['Primera', 0], ['Primera', 1], ['Segunda', 2]]);
+  });
+
+  test('POST duplicate responde 404 si no existe, 400 si el id es malformado y 409 con la columna llena', async () => {
+    assert.equal((await request(app).post('/api/kanban/cards/999/duplicate')).status, 404);
+    assert.equal((await request(app).post('/api/kanban/cards/abc/duplicate')).status, 400);
+
+    const column = await addColumn('A');
+    const first = await addCard(column.id, 'T0');
+    await pool.query(
+      `INSERT INTO kanban_cards (column_id, title, position) SELECT $1, 'T' || g, g FROM generate_series(1, $2::int - 1) AS g`,
+      [column.id, MAX_CARDS_PER_COLUMN]
+    );
+    const res = await request(app).post(`/api/kanban/cards/${first.id}/duplicate`);
+    assert.equal(res.status, 409);
+    assert.match(res.body.error.message, /como máximo 50 tarjetas/);
+  });
+
+  test('al duplicar una columna, las tarjetas conservan su estado completada', async () => {
+    const column = await addColumn('A');
+    const card = await addCard(column.id, 'Hecha');
+    await addCard(column.id, 'Pendiente');
+    await request(app).patch(`/api/kanban/cards/${card.id}/completed`).send({ completed: true });
+    const copy = (await request(app).post(`/api/kanban/columns/${column.id}/duplicate`)).body.data;
+    assert.deepEqual(copy.cards.map((c) => [c.title, c.completed]), [['Hecha', true], ['Pendiente', false]]);
   });
 });

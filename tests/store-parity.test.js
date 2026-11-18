@@ -176,6 +176,8 @@ const kanbanApi = (() => {
     missingId: 999999,
     getBoard: () => send('get', ''),
     updateProject: (body) => send('put', '/project', body),
+    setCardCompleted: (id, completed) => send('patch', `/cards/${id}/completed`, { completed }),
+    duplicateCard: (id) => send('post', `/cards/${id}/duplicate`),
     createColumn: (body) => send('post', '/columns', body),
     duplicateColumn: (id) => send('post', `/columns/${id}/duplicate`),
     updateColumn: (id, body) => send('put', `/columns/${id}`, body),
@@ -198,7 +200,7 @@ const kanbanBrowser = (() => {
       return kanbanFailure(error.status, error.message, error.details);
     }
   };
-  const names = ['getBoard', 'updateProject', 'createColumn', 'duplicateColumn', 'updateColumn', 'moveColumn', 'deleteColumn', 'clearColumn',
+  const names = ['getBoard', 'updateProject', 'createColumn', 'duplicateColumn', 'setCardCompleted', 'duplicateCard', 'updateColumn', 'moveColumn', 'deleteColumn', 'clearColumn',
     'moveAllCards', 'createCard', 'updateCard', 'moveCard', 'deleteCard'];
   return { missingId: 'no-existe', ...Object.fromEntries(names.map((name) => [name, call(name)])) };
 })();
@@ -280,6 +282,9 @@ describe('Paridad del tablero Kanban: API (PostgreSQL) / sessionStorage', () => 
       ['updateProject', { description: 'y'.repeat(301) }],
       ['updateProject', { name: 7, description: false }],
       ['updateProject', []],
+      ['setCardCompleted', card('A'), 'true'],
+      ['setCardCompleted', card('A'), 1],
+      ['setCardCompleted', card('A'), null],
       ['updateColumn', col('Hecho'), { name: '' }],
       ['createCard', col('Hecho'), {}],
       ['createCard', col('Hecho'), { title: 'x'.repeat(151) }],
@@ -308,6 +313,8 @@ describe('Paridad del tablero Kanban: API (PostgreSQL) / sessionStorage', () => 
       ['deleteColumn', MISSING],
       ['clearColumn', MISSING],
       ['duplicateColumn', MISSING],
+      ['setCardCompleted', MISSING, true],
+      ['duplicateCard', MISSING],
       ['moveAllCards', MISSING, col('Hecho')],
       ['moveAllCards', col('Por hacer'), MISSING],
       ['createCard', MISSING, { title: 'X' }],
@@ -393,6 +400,26 @@ describe('Paridad del tablero Kanban: API (PostgreSQL) / sessionStorage', () => 
         ['x'.repeat(60), []],
         [`${'x'.repeat(52)} (copia)`, []], // el nombre se recorta para no pasar de 60 caracteres
       ]
+    );
+  });
+
+  test('completar y duplicar tarjetas produce los mismos datos y el mismo orden', async () => {
+    const board = await assertSameKanban([
+      ...BASE_BOARD,
+      ['setCardCompleted', card('B'), true],
+      ['duplicateCard', card('B')],
+      ['updateCard', card('A'), { title: 'A editada' }],
+      ['setCardCompleted', card('A'), true],
+      ['setCardCompleted', card('B'), false],
+      ['duplicateColumn', col('Por hacer')],
+    ]);
+    assert.deepEqual(
+      board.columns[0].cards.map((item) => [item.title, item.completed]),
+      [['A editada', true], ['B', false], ['B', true], ['C', false]]
+    );
+    assert.deepEqual(
+      board.columns[1].cards.map((item) => [item.title, item.completed]),
+      [['A editada', true], ['B', false], ['B', true], ['C', false]]
     );
   });
 

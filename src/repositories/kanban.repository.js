@@ -11,7 +11,7 @@ const COLUMN_FIELDS = `
 
 const CARD_FIELDS = `
   id, column_id AS "columnId", title, description, priority,
-  due_date AS "dueDate", position, created_at AS "createdAt", updated_at AS "updatedAt"`;
+  due_date AS "dueDate", completed, position, created_at AS "createdAt", updated_at AS "updatedAt"`;
 
 /* ---------- Columnas ---------- */
 
@@ -99,12 +99,13 @@ async function findCardIds(db, columnId) {
   return rows.map((row) => row.id);
 }
 
-async function insertCard(db, columnId, { title, description, priority, dueDate }, position) {
+// `completed` solo viene en las copias (duplicar); una tarjeta nueva empieza sin completar.
+async function insertCard(db, columnId, { title, description, priority, dueDate, completed = false }, position) {
   const { rows } = await db.query(
-    `INSERT INTO kanban_cards (column_id, title, description, priority, due_date, position)
-     VALUES ($1, $2, $3, $4, $5, $6)
+    `INSERT INTO kanban_cards (column_id, title, description, priority, due_date, completed, position)
+     VALUES ($1, $2, $3, $4, $5, $6, $7)
      RETURNING ${CARD_FIELDS}`,
-    [columnId, title, description, priority, dueDate, position]
+    [columnId, title, description, priority, dueDate, completed, position]
   );
   return rows[0];
 }
@@ -120,6 +121,14 @@ async function updateCard(db, id, { title, description, priority, dueDate }) {
   return rows[0] || null;
 }
 
+async function updateCardCompleted(db, id, completed) {
+  const { rows } = await db.query(
+    `UPDATE kanban_cards SET completed = $1 WHERE id = $2 RETURNING ${CARD_FIELDS}`,
+    [completed, id]
+  );
+  return rows[0] || null;
+}
+
 async function deleteCard(db, id) {
   await db.query('DELETE FROM kanban_cards WHERE id = $1', [id]);
 }
@@ -128,8 +137,8 @@ async function deleteCard(db, id) {
 // INSERT ... SELECT hace la copia en una sola consulta, sin pasar los datos por JavaScript.
 async function copyCards(db, sourceColumnId, targetColumnId) {
   await db.query(
-    `INSERT INTO kanban_cards (column_id, title, description, priority, due_date, position)
-     SELECT $2, title, description, priority, due_date, position
+    `INSERT INTO kanban_cards (column_id, title, description, priority, due_date, completed, position)
+     SELECT $2, title, description, priority, due_date, completed, position
      FROM kanban_cards WHERE column_id = $1
      ORDER BY position, id`,
     [sourceColumnId, targetColumnId]
@@ -185,6 +194,7 @@ module.exports = {
   findCardIds,
   insertCard,
   updateCard,
+  updateCardCompleted,
   deleteCard,
   copyCards,
   deleteCardsOfColumn,

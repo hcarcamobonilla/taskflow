@@ -15,6 +15,7 @@ import {
   copyColumnName,
   validateProject,
   validateCard,
+  validateCompleted,
   validateColumnMove,
   validateCardMove,
   validateMoveAllCards,
@@ -87,8 +88,9 @@ function toColumn(column, position) {
   return { ...fields, position };
 }
 
+// `completed` puede faltar en tarjetas guardadas antes de que existiera: cuentan como sin completar.
 function toCard(card, columnId, position) {
-  return { ...card, columnId, position };
+  return { ...card, completed: card.completed === true, columnId, position };
 }
 
 function toBoard(columns, project) {
@@ -217,7 +219,7 @@ export async function createCard(columnId, input) {
   const column = columns[findColumnIndexOrFail(columns, columnId)];
   if (column.cards.length >= MAX_CARDS_PER_COLUMN) throw columnFull();
   const timestamp = now();
-  const card = { id: newId(), ...fields, createdAt: timestamp, updatedAt: timestamp };
+  const card = { id: newId(), ...fields, completed: false, createdAt: timestamp, updatedAt: timestamp };
   column.cards.push(card);
   writeColumns(columns);
   return toCard(card, column.id, column.cards.length - 1);
@@ -230,6 +232,27 @@ export async function updateCard(id, input) {
   column.cards[index] = { ...column.cards[index], ...fields, updatedAt: now() };
   writeColumns(columns);
   return toCard(column.cards[index], column.id, index);
+}
+
+export async function setCardCompleted(id, input) {
+  const completed = validateCompleted({ completed: input });
+  const columns = readColumns();
+  const { column, index } = findCardOrFail(columns, id);
+  column.cards[index] = { ...column.cards[index], completed, updatedAt: now() };
+  writeColumns(columns);
+  return toCard(column.cards[index], column.id, index);
+}
+
+// Copia la tarjeta (con su estado) justo debajo de la original, en la misma columna.
+export async function duplicateCard(id) {
+  const columns = readColumns();
+  const { column, index } = findCardOrFail(columns, id);
+  if (column.cards.length >= MAX_CARDS_PER_COLUMN) throw columnFull();
+  const timestamp = now();
+  const copy = { ...column.cards[index], id: newId(), createdAt: timestamp, updatedAt: timestamp };
+  column.cards = insertAt(column.cards, copy, index + 1);
+  writeColumns(columns);
+  return toCard(copy, column.id, index + 1);
 }
 
 // Mueve una tarjeta a `columnId` (puede ser su misma columna). Sin `position`, va al final.

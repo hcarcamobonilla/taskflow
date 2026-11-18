@@ -22,6 +22,8 @@
 //   moveAllCards(id, targetColumnId)     -> tablero completo
 //   createCard(columnId, card)           -> tarjeta creada
 //   updateCard(id, card)                 -> tarjeta actualizada
+//   setCardCompleted(id, completed)      -> tarjeta actualizada (marca o desmarca «completada»)
+//   duplicateCard(id)                    -> copia de la tarjeta, justo debajo de la original
 //   moveCard(id, columnId, position)     -> tarjeta movida
 //   deleteCard(id)                       -> null
 //

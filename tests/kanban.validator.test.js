@@ -124,3 +124,17 @@ describe('movimientos', () => {
     assert.deepEqual(errorFields(() => validator.validateMoveAllCards({ targetColumnId: 1 }, 1)), ['targetColumnId']);
   });
 });
+
+describe('validateCompleted', () => {
+  test('acepta true y false', () => {
+    assert.equal(validator.validateCompleted({ completed: true }), true);
+    assert.equal(validator.validateCompleted({ completed: false }), false);
+  });
+
+  test('rechaza lo que no sea un booleano y los cuerpos que no son un objeto', () => {
+    for (const completed of [undefined, null, 'true', 1, 0, {}]) {
+      assert.deepEqual(errorFields(() => validator.validateCompleted({ completed })), ['completed']);
+    }
+    assert.deepEqual(errorFields(() => validator.validateCompleted(null)), ['body']);
+  });
+});

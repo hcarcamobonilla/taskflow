@@ -140,6 +140,29 @@ async function updateCard(id, input) {
   return card;
 }
 
+// Marca o desmarca una tarjeta como completada.
+async function setCardCompleted(id, completed) {
+  const card = await repository.updateCardCompleted(pool, id, completed);
+  if (!card) throw cardNotFound();
+  return card;
+}
+
+// Copia la tarjeta (con su estado) justo debajo de la original, en la misma columna.
+function duplicateCard(id) {
+  return withTransaction(async (db) => {
+    const card = await repository.findCard(db, id);
+    if (!card) throw cardNotFound();
+    await repository.lockColumns(db, [card.columnId]);
+
+    const ids = await repository.findCardIds(db, card.columnId);
+    if (ids.length >= MAX_CARDS_PER_COLUMN) throw columnFull();
+
+    const copy = await repository.insertCard(db, card.columnId, card, ids.length);
+    await repository.saveCardOrder(db, card.columnId, insertAt(ids, copy.id, ids.indexOf(id) + 1));
+    return repository.findCard(db, copy.id);
+  });
+}
+
 // Mueve una tarjeta a `columnId` (puede ser su misma columna) en la posición indicada.
 function moveCard(id, { columnId, position }) {
   return withTransaction(async (db) => {
@@ -184,6 +207,8 @@ module.exports = {
   moveAllCards,
   createCard,
   updateCard,
+  setCardCompleted,
+  duplicateCard,
   moveCard,
   removeCard,
 };

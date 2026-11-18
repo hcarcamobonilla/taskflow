@@ -145,6 +145,15 @@ export function validateCard(body) {
   return card;
 }
 
+// Estado «completada» de una tarjeta (obligatorio, true o false).
+export function validateCompleted(body) {
+  requireObject(body);
+  if (typeof body.completed !== 'boolean') {
+    fail([{ field: 'completed', message: 'completed debe ser true o false' }]);
+  }
+  return body.completed;
+}
+
 // Nueva posición de una columna (obligatoria).
 export function validateColumnMove(body) {
   requireObject(body);
@@ -200,6 +209,7 @@ export function toExport(board, exportedAt) {
         description: card.description,
         priority: card.priority,
         dueDate: card.dueDate,
+        completed: card.completed,
       })),
     })),
   };

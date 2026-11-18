@@ -71,6 +71,17 @@ async function updateCard(req, res) {
   res.json({ data: await service.updateCard(id, input) });
 }
 
+async function setCardCompleted(req, res) {
+  const id = validator.parseId(req.params.id);
+  const completed = validator.validateCompleted(req.body);
+  res.json({ data: await service.setCardCompleted(id, completed) });
+}
+
+async function duplicateCard(req, res) {
+  const id = validator.parseId(req.params.id);
+  res.status(201).json({ data: await service.duplicateCard(id) });
+}
+
 async function moveCard(req, res) {
   const id = validator.parseId(req.params.id);
   const move = validator.validateCardMove(req.body);
@@ -95,6 +106,8 @@ module.exports = {
   moveAllCards,
   createCard,
   updateCard,
+  setCardCompleted,
+  duplicateCard,
   moveCard,
   removeCard,
 };

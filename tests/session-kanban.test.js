@@ -126,6 +126,38 @@ describe('tablero y columnas', () => {
     assert.equal(board.columns[0].name, 'A');
   });
 
+  test('setCardCompleted marca y desmarca, valida el valor y no cambia el resto de la tarjeta', async () => {
+    const { cards } = await seedBoard();
+    assert.equal(cards.A.completed, false);
+    const done = await store.setCardCompleted(cards.A.id, true);
+    assert.deepEqual([done.completed, done.title, done.position], [true, 'A', 0]);
+    const edited = await store.updateCard(cards.A.id, { title: 'A editada' });
+    assert.equal(edited.completed, true); // editar no desmarca
+    assert.equal((await store.setCardCompleted(cards.A.id, false)).completed, false);
+
+    await assertRejects(store.setCardCompleted(cards.A.id, 'true'), 400, (error) => {
+      assert.deepEqual(error.details.map((d) => d.field), ['completed']);
+    });
+    await assertRejects(store.setCardCompleted('no-existe', true), 404);
+  });
+
+  test('tarjetas guardadas antes de existir «completada» se leen como sin completar', async () => {
+    storage.setItem(store.KANBAN_KEY, JSON.stringify({
+      columns: [{ id: 'a', name: 'A', cards: [{ id: 'c', title: 'Vieja', priority: 'low' }] }],
+    }));
+    assert.equal((await store.getBoard()).columns[0].cards[0].completed, false);
+  });
+
+  test('duplicateCard copia la tarjeta con su estado justo debajo, con id nuevo', async () => {
+    const { todo, cards } = await seedBoard();
+    await store.setCardCompleted(cards.B.id, true);
+    const copy = await store.duplicateCard(cards.B.id);
+    assert.deepEqual([copy.title, copy.completed, copy.position, copy.columnId], ['B', true, 2, todo.id]);
+    assert.notEqual(copy.id, cards.B.id);
+    assert.deepEqual(await summary(), { 'Por hacer': ['A', 'B', 'B', 'C'], 'En curso': ['X'] });
+    await assertRejects(store.duplicateCard('no-existe'), 404);
+  });
+
   test('updateColumn cambia el nombre; moveColumn reordena', async () => {
     const { todo, doing } = await seedBoard();
     const updated = await store.updateColumn(doing.id, { name: 'Haciendo' });
@@ -260,6 +292,7 @@ describe('exportación', () => {
     await store.updateCard(cards.A.id, { title: 'A', description: 'Detalle', priority: 'high', dueDate: '2026-12-01' });
 
     await store.updateProject({ name: 'Mi app', description: 'Breve' });
+    await store.setCardCompleted(cards.B.id, true);
     const exported = rules.toExport(await store.getBoard(), '2026-11-16T10:00:00.000Z');
     assert.deepEqual(exported, {
       app: 'TaskFlow',
@@ -271,12 +304,12 @@ describe('exportación', () => {
         {
           name: 'Por hacer',
           cards: [
-            { title: 'A', description: 'Detalle', priority: 'high', dueDate: '2026-12-01' },
-            { title: 'B', description: null, priority: 'medium', dueDate: null },
-            { title: 'C', description: null, priority: 'medium', dueDate: null },
+            { title: 'A', description: 'Detalle', priority: 'high', dueDate: '2026-12-01', completed: false },
+            { title: 'B', description: null, priority: 'medium', dueDate: null, completed: true },
+            { title: 'C', description: null, priority: 'medium', dueDate: null, completed: false },
           ],
         },
-        { name: 'En curso', cards: [{ title: 'X', description: null, priority: 'medium', dueDate: null }] },
+        { name: 'En curso', cards: [{ title: 'X', description: null, priority: 'medium', dueDate: null, completed: false }] },
       ],
     });
     assert.doesNotMatch(JSON.stringify(exported), /"id"|columnId|createdAt/);

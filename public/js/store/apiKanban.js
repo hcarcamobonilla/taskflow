@@ -59,6 +59,14 @@ export function updateCard(id, card) {
   return request(`/cards/${id}`, { method: 'PUT', body: card });
 }
 
+export function setCardCompleted(id, completed) {
+  return request(`/cards/${id}/completed`, { method: 'PATCH', body: { completed } });
+}
+
+export function duplicateCard(id) {
+  return request(`/cards/${id}/duplicate`, { method: 'POST' });
+}
+
 // Sin `position`, la tarjeta va al final de la columna de destino.
 export function moveCard(id, columnId, position) {
   return request(`/cards/${id}/move`, { method: 'PATCH', body: { columnId, position } });
