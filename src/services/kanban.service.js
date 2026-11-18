@@ -8,7 +8,7 @@
 const pool = require('../db/pool');
 const { withTransaction } = require('../db/transaction');
 const repository = require('../repositories/kanban.repository');
-const { MAX_COLUMNS, MAX_CARDS_PER_COLUMN } = require('../validators/kanban.validator');
+const { MAX_COLUMNS, MAX_CARDS_PER_COLUMN, copyColumnName } = require('../validators/kanban.validator');
 const HttpError = require('../utils/HttpError');
 
 const columnNotFound = () => new HttpError(404, 'Columna no encontrada');
@@ -22,11 +22,13 @@ function insertAt(ids, id, position) {
   return [...ids.slice(0, index), id, ...ids.slice(index)];
 }
 
-// Tablero completo: cada columna con sus tarjetas, todo en orden.
+// Tablero completo: el proyecto y cada columna con sus tarjetas, todo en orden.
 async function getBoard(db = pool) {
+  const project = await repository.findProject(db);
   const columns = await repository.findColumns(db);
   const cards = await repository.findCards(db);
   return {
+    project,
     columns: columns.map((column) => ({
       ...column,
       cards: cards.filter((card) => card.columnId === column.id),
@@ -34,13 +36,40 @@ async function getBoard(db = pool) {
   };
 }
 
+/* ---------- Proyecto ---------- */
+
+function updateProject(input) {
+  return repository.saveProject(pool, input);
+}
+
 /* ---------- Columnas ---------- */
 
-function createColumn(input) {
+// Crea una columna en la posición pedida (sin posición, al final) y renumera las demás.
+function createColumn({ name, position }) {
   return withTransaction(async (db) => {
     const ids = await repository.lockAllColumnIds(db);
     if (ids.length >= MAX_COLUMNS) throw boardFull();
-    return repository.insertColumn(db, input, ids.length);
+    const column = await repository.insertColumn(db, { name }, ids.length);
+    const order = insertAt(ids, column.id, position);
+    await repository.saveColumnOrder(db, order);
+    return { ...column, position: order.indexOf(column.id) };
+  });
+}
+
+// Copia la columna y todas sus tarjetas justo a su derecha.
+function duplicateColumn(id) {
+  return withTransaction(async (db) => {
+    const ids = await repository.lockAllColumnIds(db);
+    if (!ids.includes(id)) throw columnNotFound();
+    if (ids.length >= MAX_COLUMNS) throw boardFull();
+
+    const source = await repository.findColumn(db, id);
+    const copy = await repository.insertColumn(db, { name: copyColumnName(source.name) }, ids.length);
+    await repository.copyCards(db, id, copy.id);
+    await repository.saveColumnOrder(db, insertAt(ids, copy.id, ids.indexOf(id) + 1));
+
+    const board = await getBoard(db);
+    return board.columns.find((column) => column.id === copy.id);
   });
 }
 
@@ -145,7 +174,9 @@ function removeCard(id) {
 
 module.exports = {
   getBoard,
+  updateProject,
   createColumn,
+  duplicateColumn,
   updateColumn,
   moveColumn,
   removeColumn,

@@ -12,6 +12,9 @@ const MAX_COLUMNS = 8;
 const MAX_CARDS_PER_COLUMN = 50;
 
 const NAME_MAX = 60;
+const PROJECT_NAME_MAX = 100;
+const PROJECT_DESCRIPTION_MAX = 300;
+const COPY_SUFFIX = ' (copia)';
 const TITLE_MAX = 150;
 const DESCRIPTION_MAX = 2000;
 const MAX_INT = 2147483647; // límite del tipo INTEGER de PostgreSQL
@@ -48,30 +51,56 @@ function parseBodyId(value, field) {
   return id;
 }
 
-// Columna (POST y PUT): nombre obligatorio y límite WIP opcional (null = sin límite).
+// Columna (PUT): solo el nombre, obligatorio.
 function validateColumn(body) {
   requireObject(body);
-  const errors = [];
-  const column = {};
-
   if (typeof body.name !== 'string' || body.name.trim() === '') {
-    errors.push({ field: 'name', message: 'El nombre de la columna es obligatorio' });
-  } else if (body.name.trim().length > NAME_MAX) {
-    errors.push({ field: 'name', message: `El nombre admite como máximo ${NAME_MAX} caracteres` });
-  } else {
-    column.name = body.name.trim();
+    fail([{ field: 'name', message: 'El nombre de la columna es obligatorio' }]);
   }
-
-  if (isEmpty(body.wipLimit)) {
-    column.wipLimit = null;
-  } else if (!Number.isInteger(body.wipLimit) || body.wipLimit < 1 || body.wipLimit > MAX_CARDS_PER_COLUMN) {
-    errors.push({ field: 'wipLimit', message: `El límite WIP debe ser un número entero entre 1 y ${MAX_CARDS_PER_COLUMN}` });
-  } else {
-    column.wipLimit = body.wipLimit;
+  if (body.name.trim().length > NAME_MAX) {
+    fail([{ field: 'name', message: `El nombre admite como máximo ${NAME_MAX} caracteres` }]);
   }
+  return { name: body.name.trim() };
+}
 
+// Columna nueva (POST): el nombre y, opcionalmente, la posición donde se inserta.
+// Sin posición va al final.
+function validateNewColumn(body) {
+  const column = validateColumn(body);
+  if (isEmpty(body.position)) return { ...column, position: null };
+  if (!isPosition(body.position)) fail([{ field: 'position', message: POSITION_MESSAGE }]);
+  return { ...column, position: body.position };
+}
+
+// Nombre de la copia de una columna: «Nombre (copia)», recortado para no pasar de NAME_MAX.
+function copyColumnName(name) {
+  if (name.length + COPY_SUFFIX.length <= NAME_MAX) return name + COPY_SUFFIX;
+  return name.slice(0, NAME_MAX - COPY_SUFFIX.length).trimEnd() + COPY_SUFFIX;
+}
+
+// Título y descripción del proyecto (PUT). Ambos son opcionales: vacío = sin definir.
+function validateProject(body) {
+  requireObject(body);
+  const errors = [];
+  const project = {};
+  const fields = [
+    ['name', 'El título', PROJECT_NAME_MAX],
+    ['description', 'La descripción', PROJECT_DESCRIPTION_MAX],
+  ];
+  for (const [field, label, max] of fields) {
+    const value = body[field];
+    if (isEmpty(value)) {
+      project[field] = '';
+    } else if (typeof value !== 'string') {
+      errors.push({ field, message: `${label} debe ser texto` });
+    } else if (value.trim().length > max) {
+      errors.push({ field, message: `${label} admite como máximo ${max} caracteres` });
+    } else {
+      project[field] = value.trim();
+    }
+  }
   if (errors.length > 0) fail(errors);
-  return column;
+  return project;
 }
 
 // Tarjeta (POST y PUT). Mismas reglas que una tarea, pero sin estado: lo indica la columna.
@@ -149,6 +178,9 @@ module.exports = {
   MAX_CARDS_PER_COLUMN,
   parseId,
   validateColumn,
+  validateNewColumn,
+  copyColumnName,
+  validateProject,
   validateCard,
   validateColumnMove,
   validateCardMove,

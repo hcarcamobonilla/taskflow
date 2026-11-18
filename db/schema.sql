@@ -37,8 +37,6 @@ CREATE TABLE IF NOT EXISTS kanban_columns (
   id         INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
   name       VARCHAR(60) NOT NULL CHECK (char_length(btrim(name)) > 0),
   position   INTEGER NOT NULL CHECK (position >= 0),
-  -- Límite WIP (trabajo en curso): NULL significa "sin límite". Es un aviso, no un bloqueo.
-  wip_limit  INTEGER CHECK (wip_limit BETWEEN 1 AND 50),
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
@@ -65,4 +63,19 @@ CREATE OR REPLACE TRIGGER kanban_columns_set_updated_at
 
 CREATE OR REPLACE TRIGGER kanban_cards_set_updated_at
   BEFORE UPDATE ON kanban_cards
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+
+-- Título y descripción del proyecto que muestra el tablero. Hay una sola fila (id = 1);
+-- una cadena vacía significa "sin definir".
+CREATE TABLE IF NOT EXISTS kanban_project (
+  id          SMALLINT PRIMARY KEY CHECK (id = 1),
+  name        VARCHAR(100) NOT NULL DEFAULT '',
+  description VARCHAR(300) NOT NULL DEFAULT '',
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+INSERT INTO kanban_project (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
+
+CREATE OR REPLACE TRIGGER kanban_project_set_updated_at
+  BEFORE UPDATE ON kanban_project
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();

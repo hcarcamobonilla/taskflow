@@ -16,10 +16,11 @@ async function resetTasks() {
   await pool.query('TRUNCATE TABLE tasks RESTART IDENTITY');
 }
 
-// Vacía el tablero Kanban (columnas y tarjetas) y reinicia los ids.
+// Vacía el tablero Kanban (columnas, tarjetas y datos del proyecto) y reinicia los ids.
 async function resetKanban() {
   assertTestDatabase();
   await pool.query('TRUNCATE TABLE kanban_cards, kanban_columns RESTART IDENTITY');
+  await pool.query('DELETE FROM kanban_project');
 }
 
 module.exports = { pool, resetTasks, resetKanban };

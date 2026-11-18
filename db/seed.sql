@@ -15,13 +15,13 @@ WHERE NOT EXISTS (SELECT 1 FROM tasks);
 -- Tablero Kanban de demostración. Solo se crea si el tablero no tiene ninguna columna;
 -- las tarjetas se insertan únicamente en las columnas recién creadas.
 WITH new_columns AS (
-  INSERT INTO kanban_columns (name, position, wip_limit)
-  SELECT v.name, v.position, v.wip_limit
+  INSERT INTO kanban_columns (name, position)
+  SELECT v.name, v.position
   FROM (VALUES
-    ('Por hacer', 0, NULL::integer),
-    ('En curso',  1, 2),
-    ('Hecho',     2, NULL)
-  ) AS v(name, position, wip_limit)
+    ('Por hacer', 0),
+    ('En curso',  1),
+    ('Hecho',     2)
+  ) AS v(name, position)
   WHERE NOT EXISTS (SELECT 1 FROM kanban_columns)
   RETURNING id, name
 )

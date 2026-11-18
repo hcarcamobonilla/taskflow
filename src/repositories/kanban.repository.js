@@ -6,7 +6,7 @@
 // para los dos casos.
 
 const COLUMN_FIELDS = `
-  id, name, position, wip_limit AS "wipLimit",
+  id, name, position,
   created_at AS "createdAt", updated_at AS "updatedAt"`;
 
 const CARD_FIELDS = `
@@ -14,6 +14,11 @@ const CARD_FIELDS = `
   due_date AS "dueDate", position, created_at AS "createdAt", updated_at AS "updatedAt"`;
 
 /* ---------- Columnas ---------- */
+
+async function findColumn(db, id) {
+  const { rows } = await db.query(`SELECT ${COLUMN_FIELDS} FROM kanban_columns WHERE id = $1`, [id]);
+  return rows[0] || null;
+}
 
 async function findColumns(db) {
   const { rows } = await db.query(`SELECT ${COLUMN_FIELDS} FROM kanban_columns ORDER BY position, id`);
@@ -37,20 +42,20 @@ async function lockColumns(db, ids) {
   return rows.map((row) => row.id);
 }
 
-async function insertColumn(db, { name, wipLimit }, position) {
+async function insertColumn(db, { name }, position) {
   const { rows } = await db.query(
-    `INSERT INTO kanban_columns (name, wip_limit, position)
-     VALUES ($1, $2, $3)
+    `INSERT INTO kanban_columns (name, position)
+     VALUES ($1, $2)
      RETURNING ${COLUMN_FIELDS}`,
-    [name, wipLimit, position]
+    [name, position]
   );
   return rows[0];
 }
 
-async function updateColumn(db, id, { name, wipLimit }) {
+async function updateColumn(db, id, { name }) {
   const { rows } = await db.query(
-    `UPDATE kanban_columns SET name = $1, wip_limit = $2 WHERE id = $3 RETURNING ${COLUMN_FIELDS}`,
-    [name, wipLimit, id]
+    `UPDATE kanban_columns SET name = $1 WHERE id = $2 RETURNING ${COLUMN_FIELDS}`,
+    [name, id]
   );
   return rows[0] || null;
 }
@@ -119,6 +124,18 @@ async function deleteCard(db, id) {
   await db.query('DELETE FROM kanban_cards WHERE id = $1', [id]);
 }
 
+// Copia las tarjetas de una columna al final de otra (vacía), conservando su orden.
+// INSERT ... SELECT hace la copia en una sola consulta, sin pasar los datos por JavaScript.
+async function copyCards(db, sourceColumnId, targetColumnId) {
+  await db.query(
+    `INSERT INTO kanban_cards (column_id, title, description, priority, due_date, position)
+     SELECT $2, title, description, priority, due_date, position
+     FROM kanban_cards WHERE column_id = $1
+     ORDER BY position, id`,
+    [sourceColumnId, targetColumnId]
+  );
+}
+
 async function deleteCardsOfColumn(db, columnId) {
   await db.query('DELETE FROM kanban_cards WHERE column_id = $1', [columnId]);
 }
@@ -135,7 +152,27 @@ async function saveCardOrder(db, columnId, ids) {
   );
 }
 
+/* ---------- Proyecto (título y descripción del tablero) ---------- */
+
+// Sin fila guardada (base creada antes de esta función) se devuelven los valores vacíos.
+async function findProject(db) {
+  const { rows } = await db.query('SELECT name, description FROM kanban_project WHERE id = 1');
+  return rows[0] || { name: '', description: '' };
+}
+
+// Inserta la fila única o, si ya existe, la actualiza (UPSERT).
+async function saveProject(db, { name, description }) {
+  const { rows } = await db.query(
+    `INSERT INTO kanban_project (id, name, description) VALUES (1, $1, $2)
+     ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description
+     RETURNING name, description`,
+    [name, description]
+  );
+  return rows[0];
+}
+
 module.exports = {
+  findColumn,
   findColumns,
   lockAllColumnIds,
   lockColumns,
@@ -149,6 +186,9 @@ module.exports = {
   insertCard,
   updateCard,
   deleteCard,
+  copyCards,
   deleteCardsOfColumn,
   saveCardOrder,
+  findProject,
+  saveProject,
 };

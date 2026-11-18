@@ -38,7 +38,7 @@ async function summary() {
 
 async function seedBoard() {
   const todo = await store.createColumn({ name: 'Por hacer' });
-  const doing = await store.createColumn({ name: 'En curso', wipLimit: 2 });
+  const doing = await store.createColumn({ name: 'En curso' });
   const cards = {};
   for (const title of ['A', 'B', 'C']) cards[title] = await store.createCard(todo.id, { title });
   cards.X = await store.createCard(doing.id, { title: 'X' });
@@ -47,15 +47,15 @@ async function seedBoard() {
 
 describe('tablero y columnas', () => {
   test('el tablero empieza vacío y sin escribir nada en sessionStorage', async () => {
-    assert.deepEqual(await store.getBoard(), { columns: [] });
+    assert.deepEqual(await store.getBoard(), { project: { name: '', description: '' }, columns: [] });
     assert.equal(storage.length, 0);
   });
 
   test('createColumn devuelve la columna con id, posición y fechas, y la guarda', async () => {
     await store.createColumn({ name: 'Primera' });
-    const column = await store.createColumn({ name: '  Segunda  ', wipLimit: 3 });
+    const column = await store.createColumn({ name: '  Segunda  ' });
     assert.equal(typeof column.id, 'string');
-    assert.deepEqual([column.name, column.position, column.wipLimit], ['Segunda', 1, 3]);
+    assert.deepEqual([column.name, column.position], ['Segunda', 1]);
     assert.equal(column.createdAt, column.updatedAt);
     assert.equal('cards' in column, false);
 
@@ -72,18 +72,64 @@ describe('tablero y columnas', () => {
   });
 
   test('createColumn valida los datos y respeta el tope de columnas', async () => {
-    await assertRejects(store.createColumn({ name: '', wipLimit: 0 }), 400, (error) => {
-      assert.deepEqual(error.details.map((d) => d.field), ['name', 'wipLimit']);
+    await assertRejects(store.createColumn({ name: '' }), 400, (error) => {
+      assert.deepEqual(error.details.map((d) => d.field), ['name']);
     });
+    await assertRejects(store.createColumn({ name: 'A', position: -1 }), 400);
     for (let i = 1; i <= rules.MAX_COLUMNS; i += 1) await store.createColumn({ name: `Columna ${i}` });
     await assertRejects(store.createColumn({ name: 'Una más' }), 409);
     assert.equal((await store.getBoard()).columns.length, rules.MAX_COLUMNS);
   });
 
-  test('updateColumn cambia nombre y límite; moveColumn reordena', async () => {
+  test('createColumn con position inserta la columna en ese lugar', async () => {
+    await store.createColumn({ name: 'A' });
+    await store.createColumn({ name: 'B' });
+    const middle = await store.createColumn({ name: 'Nueva', position: 1 });
+    assert.equal(middle.position, 1);
+    const last = await store.createColumn({ name: 'Última', position: 99 });
+    assert.equal(last.position, 3);
+    assert.deepEqual((await store.getBoard()).columns.map((c) => c.name), ['A', 'Nueva', 'B', 'Última']);
+  });
+
+  test('duplicateColumn copia la columna con sus tarjetas a su derecha, con ids nuevos', async () => {
+    const { todo, cards } = await seedBoard();
+    const copy = await store.duplicateColumn(todo.id);
+    assert.deepEqual([copy.name, copy.position], ['Por hacer (copia)', 1]);
+    assert.notEqual(copy.id, todo.id);
+    assert.deepEqual(copy.cards.map((c) => [c.title, c.position, c.columnId]), [['A', 0, copy.id], ['B', 1, copy.id], ['C', 2, copy.id]]);
+    assert.equal(copy.cards.some((c) => c.id === cards.A.id), false);
+
+    assert.deepEqual((await store.getBoard()).columns.map((c) => c.name), ['Por hacer', 'Por hacer (copia)', 'En curso']);
+    await assertRejects(store.duplicateColumn('no-existe'), 404);
+    for (let i = 4; i <= rules.MAX_COLUMNS; i += 1) await store.createColumn({ name: `Columna ${i}` }); // ya hay 3
+    await assertRejects(store.duplicateColumn(todo.id), 409);
+  });
+
+  test('updateProject guarda título y descripción sin tocar las columnas; las demás operaciones los conservan', async () => {
+    const { todo } = await seedBoard();
+    assert.deepEqual(await store.updateProject({ name: '  Mi app ', description: 'Breve' }), { name: 'Mi app', description: 'Breve' });
+    await store.createColumn({ name: 'Otra' });
+    await store.moveColumn(todo.id, 2);
+    await store.clearColumn(todo.id);
+    const board = await store.getBoard();
+    assert.deepEqual(board.project, { name: 'Mi app', description: 'Breve' });
+    assert.equal(board.columns.length, 3);
+
+    await assertRejects(store.updateProject({ name: 'x'.repeat(101) }), 400);
+    assert.deepEqual(await store.updateProject({}), { name: '', description: '' });
+  });
+
+  test('datos guardados antes de que existiera el proyecto se leen con el proyecto vacío', async () => {
+    storage.setItem(store.KANBAN_KEY, JSON.stringify({ columns: [{ id: 'a', name: 'A', cards: [] }] }));
+    const board = await store.getBoard();
+    assert.deepEqual(board.project, { name: '', description: '' });
+    assert.equal(board.columns[0].name, 'A');
+  });
+
+  test('updateColumn cambia el nombre; moveColumn reordena', async () => {
     const { todo, doing } = await seedBoard();
     const updated = await store.updateColumn(doing.id, { name: 'Haciendo' });
-    assert.deepEqual([updated.name, updated.wipLimit, updated.position], ['Haciendo', null, 1]);
+    assert.deepEqual([updated.name, updated.position], ['Haciendo', 1]);
 
     const board = await store.moveColumn(doing.id, 0);
     assert.deepEqual(board.columns.map((c) => c.name), ['Haciendo', 'Por hacer']);
@@ -196,7 +242,7 @@ describe('datos del invitado', () => {
       await assertRejects(store.getBoard(), 0, (error) => assert.match(error.message, /dañados/));
     }
     await store.clearAll();
-    assert.deepEqual(await store.getBoard(), { columns: [] });
+    assert.deepEqual(await store.getBoard(), { project: { name: '', description: '' }, columns: [] });
   });
 
   test('con sessionStorage bloqueado, las operaciones fallan con un mensaje claro', async () => {
@@ -213,23 +259,24 @@ describe('exportación', () => {
     const { cards } = await seedBoard();
     await store.updateCard(cards.A.id, { title: 'A', description: 'Detalle', priority: 'high', dueDate: '2026-12-01' });
 
+    await store.updateProject({ name: 'Mi app', description: 'Breve' });
     const exported = rules.toExport(await store.getBoard(), '2026-11-16T10:00:00.000Z');
     assert.deepEqual(exported, {
       app: 'TaskFlow',
       type: 'kanban-board',
-      version: 1,
+      version: 2,
       exportedAt: '2026-11-16T10:00:00.000Z',
+      project: { name: 'Mi app', description: 'Breve' },
       columns: [
         {
           name: 'Por hacer',
-          wipLimit: null,
           cards: [
             { title: 'A', description: 'Detalle', priority: 'high', dueDate: '2026-12-01' },
             { title: 'B', description: null, priority: 'medium', dueDate: null },
             { title: 'C', description: null, priority: 'medium', dueDate: null },
           ],
         },
-        { name: 'En curso', wipLimit: 2, cards: [{ title: 'X', description: null, priority: 'medium', dueDate: null }] },
+        { name: 'En curso', cards: [{ title: 'X', description: null, priority: 'medium', dueDate: null }] },
       ],
     });
     assert.doesNotMatch(JSON.stringify(exported), /"id"|columnId|createdAt/);

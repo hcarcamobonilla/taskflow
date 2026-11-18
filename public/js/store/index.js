@@ -11,9 +11,11 @@
 //
 // y las del tablero Kanban (apiKanban.js y sessionKanban.js):
 //
-//   getBoard()                           -> { columns: [columna con sus tarjetas en `cards`] }
-//   createColumn({ name, wipLimit })     -> columna creada
-//   updateColumn(id, { name, wipLimit }) -> columna actualizada
+//   getBoard()                           -> { project: { name, description }, columns: [columna con sus tarjetas en `cards`] }
+//   updateProject({ name, description }) -> proyecto actualizado
+//   createColumn({ name, position })     -> columna creada (sin position, al final)
+//   duplicateColumn(id)                  -> copia de la columna con sus tarjetas, a su derecha
+//   updateColumn(id, { name })           -> columna actualizada
 //   moveColumn(id, position)             -> tablero completo
 //   deleteColumn(id)                     -> null (elimina también sus tarjetas)
 //   clearColumn(id)                      -> null (elimina solo sus tarjetas)

@@ -175,7 +175,9 @@ const kanbanApi = (() => {
   return {
     missingId: 999999,
     getBoard: () => send('get', ''),
+    updateProject: (body) => send('put', '/project', body),
     createColumn: (body) => send('post', '/columns', body),
+    duplicateColumn: (id) => send('post', `/columns/${id}/duplicate`),
     updateColumn: (id, body) => send('put', `/columns/${id}`, body),
     moveColumn: (id, position) => send('patch', `/columns/${id}/move`, { position }),
     deleteColumn: (id) => send('delete', `/columns/${id}`),
@@ -196,7 +198,7 @@ const kanbanBrowser = (() => {
       return kanbanFailure(error.status, error.message, error.details);
     }
   };
-  const names = ['getBoard', 'createColumn', 'updateColumn', 'moveColumn', 'deleteColumn', 'clearColumn',
+  const names = ['getBoard', 'updateProject', 'createColumn', 'duplicateColumn', 'updateColumn', 'moveColumn', 'deleteColumn', 'clearColumn',
     'moveAllCards', 'createCard', 'updateCard', 'moveCard', 'deleteCard'];
   return { missingId: 'no-existe', ...Object.fromEntries(names.map((name) => [name, call(name)])) };
 })();
@@ -223,7 +225,7 @@ async function runStep(side, known, [operation, ...args]) {
   });
   const result = await side[operation](...resolved);
   if (result && !result.error) {
-    if (operation === 'createColumn') known.columns[result.name] = result.id;
+    if (operation === 'createColumn' || operation === 'duplicateColumn') known.columns[result.name] = result.id;
     if (operation === 'createCard') known.cards[result.title] = result.id;
   }
   return result;
@@ -249,8 +251,8 @@ async function assertSameKanban(steps) {
 
 const BASE_BOARD = [
   ['createColumn', { name: 'Por hacer' }],
-  ['createColumn', { name: '  En curso  ', wipLimit: 2 }],
-  ['createColumn', { name: 'Hecho', wipLimit: null }],
+  ['createColumn', { name: '  En curso  ' }],
+  ['createColumn', { name: 'Hecho' }],
   ['createCard', col('Por hacer'), { title: 'A' }],
   ['createCard', col('Por hacer'), { title: '  B  ', description: '  detalle  ', priority: 'high', dueDate: '2028-02-29' }],
   ['createCard', col('Por hacer'), { title: 'C', description: '   ', dueDate: '' }],
@@ -270,11 +272,14 @@ describe('Paridad del tablero Kanban: API (PostgreSQL) / sessionStorage', () => 
       ['createColumn', { name: '   ' }],
       ['createColumn', { name: 7 }],
       ['createColumn', { name: 'x'.repeat(61) }],
-      ['createColumn', { name: 'A', wipLimit: 0 }],
-      ['createColumn', { name: 'A', wipLimit: 51 }],
-      ['createColumn', { name: 'A', wipLimit: 2.5 }],
-      ['createColumn', { name: 'A', wipLimit: '3' }],
-      ['createColumn', { name: '', wipLimit: -1 }],
+      ['createColumn', { name: 'A', position: -1 }],
+      ['createColumn', { name: 'A', position: 1.5 }],
+      ['createColumn', { name: 'A', position: '1' }],
+      ['createColumn', { name: '', position: -1 }],
+      ['updateProject', { name: 'x'.repeat(101) }],
+      ['updateProject', { description: 'y'.repeat(301) }],
+      ['updateProject', { name: 7, description: false }],
+      ['updateProject', []],
       ['updateColumn', col('Hecho'), { name: '' }],
       ['createCard', col('Hecho'), {}],
       ['createCard', col('Hecho'), { title: 'x'.repeat(151) }],
@@ -302,6 +307,7 @@ describe('Paridad del tablero Kanban: API (PostgreSQL) / sessionStorage', () => 
       ['moveColumn', MISSING, 0],
       ['deleteColumn', MISSING],
       ['clearColumn', MISSING],
+      ['duplicateColumn', MISSING],
       ['moveAllCards', MISSING, col('Hecho')],
       ['moveAllCards', col('Por hacer'), MISSING],
       ['createCard', MISSING, { title: 'X' }],
@@ -315,7 +321,7 @@ describe('Paridad del tablero Kanban: API (PostgreSQL) / sessionStorage', () => 
   test('editar, mover y reordenar dejan el mismo tablero en las dos versiones', async () => {
     const board = await assertSameKanban([
       ...BASE_BOARD,
-      ['updateColumn', col('Hecho'), { name: 'Terminado', wipLimit: 5 }],
+      ['updateColumn', col('Hecho'), { name: 'Terminado' }],
       ['updateColumn', col('En curso'), { name: 'En curso' }],
       ['updateCard', card('A'), { title: 'A editada', description: 'nueva', priority: 'low', dueDate: '2026-12-24' }],
       ['moveCard', card('C'), col('Por hacer'), 0],
@@ -353,6 +359,56 @@ describe('Paridad del tablero Kanban: API (PostgreSQL) / sessionStorage', () => 
     );
   });
 
+  test('crear una columna en una posición dejan el mismo orden en las dos versiones', async () => {
+    const board = await assertSameKanban([
+      ...BASE_BOARD,
+      ['createColumn', { name: 'Entre medias', position: 1 }],
+      ['createColumn', { name: 'La primera', position: 0 }],
+      ['createColumn', { name: 'Al final', position: 99 }],
+      ['createColumn', { name: 'Sin posición', position: null }],
+    ]);
+    assert.deepEqual(
+      board.columns.map((column) => column.name),
+      ['La primera', 'Por hacer', 'Entre medias', 'En curso', 'Hecho', 'Al final', 'Sin posición']
+    );
+  });
+
+  test('duplicar una columna produce la misma copia y el mismo tablero', async () => {
+    const board = await assertSameKanban([
+      ...BASE_BOARD,
+      ['duplicateColumn', col('Por hacer')],
+      ['duplicateColumn', col('Hecho')],
+      ['createColumn', { name: 'x'.repeat(60) }],
+      ['duplicateColumn', col('x'.repeat(60))],
+      ['moveCard', card('X'), col('Por hacer (copia)')],
+      ['deleteColumn', col('Por hacer')],
+    ]);
+    assert.deepEqual(
+      board.columns.map((column) => [column.name, column.cards.map((item) => item.title)]),
+      [
+        ['Por hacer (copia)', ['A', 'B', 'C', 'X']],
+        ['En curso', []],
+        ['Hecho', []],
+        ['Hecho (copia)', []],
+        ['x'.repeat(60), []],
+        [`${'x'.repeat(52)} (copia)`, []], // el nombre se recorta para no pasar de 60 caracteres
+      ]
+    );
+  });
+
+  test('el título y la descripción del proyecto se guardan igual y no los toca ningún otro cambio', async () => {
+    const board = await assertSameKanban([
+      ['updateProject', { name: '  Mi proyecto ', description: ' Algo breve ' }],
+      ...BASE_BOARD,
+      ['moveColumn', col('Hecho'), 0],
+      ['deleteColumn', col('En curso')],
+      ['updateProject', { name: 'Otro título' }],
+      ['updateProject', {}],
+      ['updateProject', { name: 'Final', description: 'Descripción final' }],
+    ]);
+    assert.deepEqual(board.project, { name: 'Final', description: 'Descripción final' });
+  });
+
   test('los topes de columnas y de tarjetas se aplican igual (409)', async () => {
     const columns = Array.from({ length: 8 }, (_, index) => ['createColumn', { name: `Columna ${index + 1}` }]);
     const cards = (columnName, count, prefix) =>
@@ -361,6 +417,8 @@ describe('Paridad del tablero Kanban: API (PostgreSQL) / sessionStorage', () => 
     await assertSameKanban([
       ...columns,
       ['createColumn', { name: 'La novena' }],
+      ['createColumn', { name: 'La novena en medio', position: 1 }],
+      ['duplicateColumn', col('Columna 1')],
       ...cards('Columna 1', 50, 'T'),
       ['createCard', col('Columna 1'), { title: 'La 51' }],
       ...cards('Columna 2', 1, 'U'),

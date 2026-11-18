@@ -8,12 +8,22 @@ async function getBoard(req, res) {
   res.json({ data: await service.getBoard() });
 }
 
+async function updateProject(req, res) {
+  const input = validator.validateProject(req.body);
+  res.json({ data: await service.updateProject(input) });
+}
+
 /* ---------- Columnas ---------- */
 
 async function createColumn(req, res) {
-  const input = validator.validateColumn(req.body);
+  const input = validator.validateNewColumn(req.body);
   const column = await service.createColumn(input);
   res.status(201).json({ data: column });
+}
+
+async function duplicateColumn(req, res) {
+  const id = validator.parseId(req.params.id);
+  res.status(201).json({ data: await service.duplicateColumn(id) });
 }
 
 async function updateColumn(req, res) {
@@ -75,7 +85,9 @@ async function removeCard(req, res) {
 
 module.exports = {
   getBoard,
+  updateProject,
   createColumn,
+  duplicateColumn,
   updateColumn,
   moveColumn,
   removeColumn,

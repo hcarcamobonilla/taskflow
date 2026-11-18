@@ -6,10 +6,12 @@ const controller = require('../controllers/kanban.controller');
 const router = Router();
 
 router.get('/', controller.getBoard);
+router.put('/project', controller.updateProject);
 
 router.post('/columns', controller.createColumn);
 router.put('/columns/:id', controller.updateColumn);
 router.patch('/columns/:id/move', controller.moveColumn);
+router.post('/columns/:id/duplicate', controller.duplicateColumn);
 router.delete('/columns/:id', controller.removeColumn);
 
 // Acciones sobre todas las tarjetas de una columna.

@@ -1,7 +1,7 @@
 // Tablero Kanban en el modo invitado: columnas y tarjetas viven en sessionStorage.
 // No hace ninguna petición de red. Misma interfaz que apiKanban.js.
 //
-// Se guarda un único objeto { columns: [ { ..., cards: [ ... ] } ] }. El orden de los
+// Se guarda un único objeto { project, columns: [ { ..., cards: [ ... ] } ] }. El orden de los
 // arreglos ES el orden del tablero, así que `position` y `columnId` no se guardan:
 // se calculan al devolver los datos, con la misma forma que usa la API.
 
@@ -11,6 +11,9 @@ import {
   MAX_COLUMNS,
   MAX_CARDS_PER_COLUMN,
   validateColumn,
+  validateNewColumn,
+  copyColumnName,
+  validateProject,
   validateCard,
   validateColumnMove,
   validateCardMove,
@@ -48,17 +51,33 @@ function looksLikeColumn(item) {
   );
 }
 
-function readColumns() {
-  const saved = readJson(KANBAN_KEY);
-  if (saved === null) return [];
-  const isValid =
-    typeof saved === 'object' && Array.isArray(saved.columns) && saved.columns.every(looksLikeColumn);
-  if (!isValid) throw corruptDataError();
-  return saved.columns;
+const EMPTY_PROJECT = { name: '', description: '' };
+
+function looksLikeProject(item) {
+  return item !== null && typeof item === 'object' && typeof item.name === 'string' && typeof item.description === 'string';
 }
 
+// Datos guardados: { project, columns }. Sin nada guardado, el tablero está vacío. El proyecto
+// puede faltar en datos guardados antes de que existiera: entonces queda sin definir.
+function readData() {
+  const saved = readJson(KANBAN_KEY);
+  if (saved === null) return { project: { ...EMPTY_PROJECT }, columns: [] };
+  const isValid =
+    typeof saved === 'object' &&
+    Array.isArray(saved.columns) &&
+    saved.columns.every(looksLikeColumn) &&
+    (saved.project === undefined || looksLikeProject(saved.project));
+  if (!isValid) throw corruptDataError();
+  return { project: saved.project || { ...EMPTY_PROJECT }, columns: saved.columns };
+}
+
+function readColumns() {
+  return readData().columns;
+}
+
+// Guarda las columnas conservando el proyecto que ya estaba guardado.
 function writeColumns(columns) {
-  writeJson(KANBAN_KEY, { columns });
+  writeJson(KANBAN_KEY, { project: readData().project, columns });
 }
 
 /* ---------- Forma de los datos devueltos (igual que la API) ---------- */
@@ -72,8 +91,9 @@ function toCard(card, columnId, position) {
   return { ...card, columnId, position };
 }
 
-function toBoard(columns) {
+function toBoard(columns, project) {
   return {
+    project: { name: project.name, description: project.description },
     columns: columns.map((column, position) => ({
       ...toColumn(column, position),
       cards: column.cards.map((card, index) => toCard(card, column.id, index)),
@@ -101,18 +121,49 @@ function findCardOrFail(columns, id) {
 /* ---------- Interfaz común (la misma que apiKanban.js) ---------- */
 
 export async function getBoard() {
-  return toBoard(readColumns());
+  const { columns, project } = readData();
+  return toBoard(columns, project);
 }
 
+export async function updateProject(input) {
+  const project = validateProject(input);
+  writeJson(KANBAN_KEY, { project, columns: readColumns() });
+  return project;
+}
+
+// Crea una columna en la posición pedida (sin posición, al final).
 export async function createColumn(input) {
-  const fields = validateColumn(input);
+  const { name, position } = validateNewColumn(input);
   const columns = readColumns();
   if (columns.length >= MAX_COLUMNS) throw boardFull();
   const timestamp = now();
-  const column = { id: newId(), ...fields, createdAt: timestamp, updatedAt: timestamp, cards: [] };
-  columns.push(column);
-  writeColumns(columns);
-  return toColumn(column, columns.length - 1);
+  const column = { id: newId(), name, createdAt: timestamp, updatedAt: timestamp, cards: [] };
+  const reordered = insertAt(columns, column, position);
+  writeColumns(reordered);
+  return toColumn(column, reordered.indexOf(column));
+}
+
+// Copia la columna y todas sus tarjetas justo a su derecha.
+export async function duplicateColumn(id) {
+  const columns = readColumns();
+  const index = findColumnIndexOrFail(columns, id);
+  if (columns.length >= MAX_COLUMNS) throw boardFull();
+  const source = columns[index];
+  const timestamp = now();
+  const copy = {
+    id: newId(),
+    name: copyColumnName(source.name),
+    createdAt: timestamp,
+    updatedAt: timestamp,
+    cards: source.cards.map((card) => ({ ...card, id: newId(), createdAt: timestamp, updatedAt: timestamp })),
+  };
+  const reordered = insertAt(columns, copy, index + 1);
+  writeColumns(reordered);
+  const position = index + 1;
+  return {
+    ...toColumn(copy, position),
+    cards: copy.cards.map((card, cardIndex) => toCard(card, copy.id, cardIndex)),
+  };
 }
 
 export async function updateColumn(id, input) {
@@ -130,7 +181,7 @@ export async function moveColumn(id, position) {
   const [column] = columns.splice(findColumnIndexOrFail(columns, id), 1);
   const reordered = insertAt(columns, column, newPosition);
   writeColumns(reordered);
-  return toBoard(reordered);
+  return toBoard(reordered, readData().project);
 }
 
 export async function deleteColumn(id) {
@@ -157,7 +208,7 @@ export async function moveAllCards(id, targetColumnId) {
   target.cards = [...target.cards, ...source.cards];
   source.cards = [];
   writeColumns(columns);
-  return toBoard(columns);
+  return toBoard(columns, readData().project);
 }
 
 export async function createCard(columnId, input) {

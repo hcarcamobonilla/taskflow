@@ -16,10 +16,9 @@ function errorFields(fn) {
 }
 
 describe('validateColumn', () => {
-  test('limpia el nombre y deja el límite WIP en null si no se envía', () => {
-    assert.deepEqual(validator.validateColumn({ name: '  Por hacer  ' }), { name: 'Por hacer', wipLimit: null });
-    assert.deepEqual(validator.validateColumn({ name: 'A', wipLimit: '' }), { name: 'A', wipLimit: null });
-    assert.deepEqual(validator.validateColumn({ name: 'A', wipLimit: 3 }), { name: 'A', wipLimit: 3 });
+  test('limpia el nombre y devuelve solo el nombre', () => {
+    assert.deepEqual(validator.validateColumn({ name: '  Por hacer  ' }), { name: 'Por hacer' });
+    assert.deepEqual(validator.validateColumn({ name: 'A', wipLimit: 3 }), { name: 'A' }); // el límite WIP ya no existe
   });
 
   test('rechaza nombres vacíos, no textuales o de más de 60 caracteres', () => {
@@ -29,17 +28,49 @@ describe('validateColumn', () => {
     assert.equal(validator.validateColumn({ name: 'x'.repeat(60) }).name.length, 60);
   });
 
-  test('rechaza límites WIP que no sean enteros entre 1 y 50', () => {
-    for (const wipLimit of [0, -1, 51, 2.5, '3', true]) {
-      assert.deepEqual(errorFields(() => validator.validateColumn({ name: 'A', wipLimit })), ['wipLimit']);
-    }
-    assert.equal(validator.validateColumn({ name: 'A', wipLimit: 50 }).wipLimit, 50);
-  });
-
   test('rechaza cuerpos que no son un objeto', () => {
     for (const body of [null, 'texto', []]) {
       assert.deepEqual(errorFields(() => validator.validateColumn(body)), ['body']);
     }
+  });
+});
+
+describe('validateNewColumn', () => {
+  test('la posición es opcional: sin ella queda en null', () => {
+    assert.deepEqual(validator.validateNewColumn({ name: 'A' }), { name: 'A', position: null });
+    assert.deepEqual(validator.validateNewColumn({ name: 'A', position: '' }), { name: 'A', position: null });
+    assert.deepEqual(validator.validateNewColumn({ name: 'A', position: 0 }), { name: 'A', position: 0 });
+  });
+
+  test('rechaza posiciones negativas, decimales o que no son números', () => {
+    for (const position of [-1, 1.5, '2', true]) {
+      assert.deepEqual(errorFields(() => validator.validateNewColumn({ name: 'A', position })), ['position']);
+    }
+  });
+});
+
+describe('copyColumnName', () => {
+  test('añade «(copia)» y recorta el nombre para no pasar de 60 caracteres', () => {
+    assert.equal(validator.copyColumnName('Por hacer'), 'Por hacer (copia)');
+    const copy = validator.copyColumnName('x'.repeat(60));
+    assert.equal(copy.length, 60);
+    assert.ok(copy.endsWith('x (copia)'));
+  });
+});
+
+describe('validateProject', () => {
+  test('limpia los textos y deja vacío lo que falta', () => {
+    assert.deepEqual(validator.validateProject({ name: '  Mi app ', description: ' Breve ' }), { name: 'Mi app', description: 'Breve' });
+    assert.deepEqual(validator.validateProject({}), { name: '', description: '' });
+    assert.deepEqual(validator.validateProject({ name: null, description: '' }), { name: '', description: '' });
+  });
+
+  test('rechaza textos largos (100 y 300) o que no son texto', () => {
+    assert.deepEqual(errorFields(() => validator.validateProject({ name: 'x'.repeat(101) })), ['name']);
+    assert.deepEqual(errorFields(() => validator.validateProject({ description: 'y'.repeat(301) })), ['description']);
+    assert.deepEqual(errorFields(() => validator.validateProject({ name: 3, description: false })), ['name', 'description']);
+    assert.equal(validator.validateProject({ name: 'x'.repeat(100), description: 'y'.repeat(300) }).name.length, 100);
+    assert.deepEqual(errorFields(() => validator.validateProject(null)), ['body']);
   });
 });
 

@@ -15,8 +15,8 @@ after(() => pool.end());
 
 /* ---------- Ayudas ---------- */
 
-async function addColumn(name, wipLimit) {
-  const res = await request(app).post('/api/kanban/columns').send({ name, wipLimit });
+async function addColumn(name, position) {
+  const res = await request(app).post('/api/kanban/columns').send({ name, position });
   assert.equal(res.status, 201);
   return res.body.data;
 }
@@ -52,18 +52,19 @@ async function assertPositionsAreConsecutive() {
 
 describe('GET /api/kanban', () => {
   test('devuelve un tablero vacío cuando no hay columnas', async () => {
-    assert.deepEqual(await getBoard(), { columns: [] });
+    assert.deepEqual(await getBoard(), { project: { name: '', description: '' }, columns: [] });
   });
 
   test('devuelve las columnas en orden, cada una con sus tarjetas en orden', async () => {
     const todo = await addColumn('Por hacer');
-    const done = await addColumn('Hecho', 3);
+    const done = await addColumn('Hecho');
     await addCard(todo.id, 'A');
     await addCard(todo.id, 'B', { description: 'Detalle', priority: 'high', dueDate: '2026-12-01' });
     await addCard(done.id, 'C');
 
     const board = await getBoard();
-    assert.deepEqual(board.columns.map((c) => [c.name, c.position, c.wipLimit]), [['Por hacer', 0, null], ['Hecho', 1, 3]]);
+    assert.deepEqual(board.columns.map((c) => [c.name, c.position]), [['Por hacer', 0], ['Hecho', 1]]);
+    assert.equal('wipLimit' in board.columns[0], false);
     const [, cardB] = board.columns[0].cards;
     assert.deepEqual(
       { ...cardB, createdAt: undefined, updatedAt: undefined },
@@ -76,20 +77,37 @@ describe('GET /api/kanban', () => {
 describe('columnas', () => {
   test('POST crea la columna al final y la guarda en PostgreSQL', async () => {
     await addColumn('Primera');
-    const column = await addColumn('  Segunda  ', 4);
-    assert.deepEqual([column.name, column.position, column.wipLimit], ['Segunda', 1, 4]);
+    const column = await addColumn('  Segunda  ');
+    assert.deepEqual([column.name, column.position], ['Segunda', 1]);
 
-    const { rows } = await pool.query('SELECT name, position, wip_limit FROM kanban_columns ORDER BY position');
+    const { rows } = await pool.query('SELECT name, position FROM kanban_columns ORDER BY position');
     assert.deepEqual(rows, [
-      { name: 'Primera', position: 0, wip_limit: null },
-      { name: 'Segunda', position: 1, wip_limit: 4 },
+      { name: 'Primera', position: 0 },
+      { name: 'Segunda', position: 1 },
     ]);
   });
 
+  test('POST con position inserta la columna en ese lugar y renumera las demás', async () => {
+    await addColumn('A');
+    await addColumn('B');
+    const middle = await addColumn('Nueva', 1);
+    assert.equal(middle.position, 1);
+    assert.deepEqual((await getBoard()).columns.map((c) => [c.name, c.position]), [['A', 0], ['Nueva', 1], ['B', 2]]);
+
+    const first = await addColumn('Primera', 0);
+    assert.equal(first.position, 0);
+    const last = await addColumn('Última', 99); // una posición mayor que el final va al final
+    assert.equal(last.position, 4);
+    assert.deepEqual((await getBoard()).columns.map((c) => c.name), ['Primera', 'A', 'Nueva', 'B', 'Última']);
+  });
+
   test('POST rechaza datos no válidos con 400 y el detalle por campo', async () => {
-    const res = await request(app).post('/api/kanban/columns').send({ name: ' ', wipLimit: 99 });
+    let res = await request(app).post('/api/kanban/columns').send({ name: ' ' });
     assert.equal(res.status, 400);
-    assert.deepEqual(res.body.error.details.map((d) => d.field), ['name', 'wipLimit']);
+    assert.deepEqual(res.body.error.details.map((d) => d.field), ['name']);
+    res = await request(app).post('/api/kanban/columns').send({ name: 'A', position: -1 });
+    assert.equal(res.status, 400);
+    assert.deepEqual(res.body.error.details.map((d) => d.field), ['position']);
   });
 
   test(`POST responde 409 al superar el tope de ${MAX_COLUMNS} columnas`, async () => {
@@ -100,11 +118,46 @@ describe('columnas', () => {
     assert.equal((await getBoard()).columns.length, MAX_COLUMNS);
   });
 
-  test('PUT cambia el nombre y el límite WIP; quitar el límite lo deja en null', async () => {
-    const column = await addColumn('Viejo', 2);
+  test('PUT cambia el nombre de la columna', async () => {
+    const column = await addColumn('Viejo');
     const res = await request(app).put(`/api/kanban/columns/${column.id}`).send({ name: 'Nuevo' });
     assert.equal(res.status, 200);
-    assert.deepEqual([res.body.data.name, res.body.data.wipLimit, res.body.data.position], ['Nuevo', null, 0]);
+    assert.deepEqual([res.body.data.name, res.body.data.position], ['Nuevo', 0]);
+  });
+
+  test('POST duplicate copia la columna con sus tarjetas justo a su derecha', async () => {
+    const a = await addColumn('A');
+    await addColumn('B');
+    await addCard(a.id, 'Uno', { priority: 'high', dueDate: '2026-12-01', description: 'Detalle' });
+    await addCard(a.id, 'Dos');
+
+    const res = await request(app).post(`/api/kanban/columns/${a.id}/duplicate`);
+    assert.equal(res.status, 201);
+    assert.deepEqual([res.body.data.name, res.body.data.position], ['A (copia)', 1]);
+    assert.notEqual(res.body.data.id, a.id);
+    assert.deepEqual(
+      res.body.data.cards.map((c) => [c.title, c.priority, c.dueDate, c.description, c.position, c.columnId]),
+      [['Uno', 'high', '2026-12-01', 'Detalle', 0, res.body.data.id], ['Dos', 'medium', null, null, 1, res.body.data.id]]
+    );
+
+    const board = await getBoard();
+    assert.deepEqual(board.columns.map((c) => c.name), ['A', 'A (copia)', 'B']);
+    assert.deepEqual(board.columns[0].cards.map((c) => c.title), ['Uno', 'Dos']); // el original no cambia
+  });
+
+  test('POST duplicate recorta el nombre largo, responde 404 si no existe y 409 con el tablero lleno', async () => {
+    const long = await addColumn('x'.repeat(60));
+    const copy = (await request(app).post(`/api/kanban/columns/${long.id}/duplicate`)).body.data;
+    assert.equal(copy.name.length, 60);
+    assert.ok(copy.name.endsWith(' (copia)'));
+
+    assert.equal((await request(app).post('/api/kanban/columns/999/duplicate')).status, 404);
+    assert.equal((await request(app).post('/api/kanban/columns/abc/duplicate')).status, 400);
+
+    for (let i = 3; i <= MAX_COLUMNS; i += 1) await addColumn(`Columna ${i}`);
+    const full = await request(app).post(`/api/kanban/columns/${long.id}/duplicate`);
+    assert.equal(full.status, 409);
+    assert.equal((await getBoard()).columns.length, MAX_COLUMNS);
   });
 
   test('PUT y DELETE responden 404 si la columna no existe y 400 si el id es malformado', async () => {
@@ -186,15 +239,6 @@ describe('tarjetas', () => {
     const res = await request(app).post(`/api/kanban/columns/${column.id}/cards`).send({ title: 'Una más' });
     assert.equal(res.status, 409);
     assert.match(res.body.error.message, /como máximo 50 tarjetas/);
-  });
-
-  test('el límite WIP es un aviso: no impide crear más tarjetas', async () => {
-    const column = await addColumn('En curso', 1);
-    await addCard(column.id, 'Una');
-    await addCard(column.id, 'Dos');
-    const board = await getBoard();
-    assert.equal(board.columns[0].cards.length, 2);
-    assert.equal(board.columns[0].wipLimit, 1);
   });
 
   test('PUT edita la tarjeta sin cambiar su columna ni su posición', async () => {
@@ -359,5 +403,38 @@ describe('transacciones', () => {
       /fallo simulado/
     );
     assert.deepEqual(await boardSummary(), { A: ['Sobrevive'] });
+  });
+});
+
+describe('proyecto (título y descripción del tablero)', () => {
+  test('GET /api/kanban devuelve el proyecto vacío al principio', async () => {
+    assert.deepEqual((await getBoard()).project, { name: '', description: '' });
+  });
+
+  test('PUT /project guarda título y descripción en PostgreSQL y el tablero los devuelve', async () => {
+    const res = await request(app).put('/api/kanban/project').send({ name: '  Mi proyecto ', description: 'Algo breve' });
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.body.data, { name: 'Mi proyecto', description: 'Algo breve' });
+
+    const { rows } = await pool.query('SELECT name, description FROM kanban_project');
+    assert.deepEqual(rows, [{ name: 'Mi proyecto', description: 'Algo breve' }]);
+    assert.deepEqual((await getBoard()).project, { name: 'Mi proyecto', description: 'Algo breve' });
+  });
+
+  test('PUT /project con campos vacíos o ausentes los deja sin definir', async () => {
+    await request(app).put('/api/kanban/project').send({ name: 'X', description: 'Y' });
+    const res = await request(app).put('/api/kanban/project').send({ name: '' });
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.body.data, { name: '', description: '' });
+  });
+
+  test('PUT /project rechaza textos demasiado largos o que no son texto', async () => {
+    let res = await request(app).put('/api/kanban/project').send({ name: 'x'.repeat(101), description: 'y'.repeat(301) });
+    assert.equal(res.status, 400);
+    assert.deepEqual(res.body.error.details.map((d) => d.field), ['name', 'description']);
+    res = await request(app).put('/api/kanban/project').send({ name: 5 });
+    assert.equal(res.status, 400);
+    res = await request(app).put('/api/kanban/project').send([]);
+    assert.equal(res.status, 400);
   });
 });

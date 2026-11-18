@@ -15,10 +15,18 @@ export function getBoard() {
   return request('');
 }
 
+export function updateProject(project) {
+  return request('/project', { method: 'PUT', body: project });
+}
+
 /* ---------- Columnas ---------- */
 
 export function createColumn(column) {
   return request('/columns', { method: 'POST', body: column });
+}
+
+export function duplicateColumn(id) {
+  return request(`/columns/${id}/duplicate`, { method: 'POST' });
 }
 
 export function updateColumn(id, column) {
