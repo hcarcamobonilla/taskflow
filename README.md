@@ -251,16 +251,23 @@ ni se sincronizan con ellas (tablas propias `kanban_columns`, `kanban_cards` y `
   descripción (máx. 100 y 300 caracteres) se escriben en el sitio y se guardan al salir del campo.
 - **Columnas**: se añaden con nombre (máx. 60 caracteres) desde el formulario (al final) o con el
   botón **Añadir sección**, que aparece al pasar el ratón entre dos columnas y crea una columna
-  nueva en ese lugar (con el nombre provisional «Nueva sección» y el diálogo para cambiarlo).
+  nueva en ese lugar (con el nombre provisional «Nueva sección» y el diálogo para cambiarlo). Al
+  pasar el ratón se ve una línea entre las dos columnas y el texto «Añadir sección» a media altura.
 - **Menú de la columna**: los tres puntos (⋯) de la esquina superior derecha abren un recuadro
   con **Editar** (nombre), **Duplicar** (copia la columna con sus tarjetas, a su derecha),
   **Eliminar** (con confirmación; elimina también sus tarjetas) y **Vaciar** (elimina solo las
   tarjetas, con confirmación). Se cierra al elegir una opción, al hacer clic fuera o con Escape.
 - **Tarjetas** (en pantalla «tareas»): título obligatorio (máx. 150), descripción (máx. 2000),
-  prioridad (arriba del título) y fecha límite opcional. Se crean con **+ Añadir Tarea**, se
-  editan (también la prioridad) y se eliminan con confirmación.
+  prioridad (arriba del título) y fecha límite opcional. Se crean con **+ Añadir Tarea**.
+  El **círculo** de arriba a la izquierda las marca como completadas (título tachado) o las deja
+  pendientes.
+- **Menú de la tarea**: los tres puntos (⋯) de la esquina superior derecha abren un recuadro con
+  **Editar** (también la prioridad), **Duplicar** (copia la tarea con su estado justo debajo),
+  **Mover** (la pasa al final de otra columna que se elige en un diálogo) y **Eliminar** (con
+  confirmación).
 - **Reordenar tarjetas**: se arrastran con el ratón, dentro de su columna o a otra columna; una
-  línea azul indica dónde caerán.
+  línea azul indica dónde caerán. «Mover» del menú es la alternativa sin arrastrar para cambiar
+  de columna.
 - **Reordenar columnas**: se arrastran con el asa ⠿ del encabezado.
 - **Contador**: junto al nombre de cada columna, «| 3» en gris (el número de tarjetas).
 - **Topes**: máximo 8 columnas por tablero y 50 tarjetas por columna; al superarlos la API
@@ -417,6 +424,8 @@ final.
 | DELETE | `/api/kanban/columns/:id/cards` | Vacía la columna (elimina sus tarjetas) | 204, 400, 404 |
 | POST | `/api/kanban/columns/:id/move-cards` | Pasa todas sus tarjetas a `targetColumnId`; devuelve el tablero (la interfaz ya no usa este endpoint) | 200, 400, 404, 409 |
 | PUT | `/api/kanban/cards/:id` | Reemplaza título, descripción, prioridad y fecha | 200, 400, 404 |
+| PATCH | `/api/kanban/cards/:id/completed` | Marca o desmarca la tarjeta como completada (`completed`: `true` o `false`) | 200, 400, 404 |
+| POST | `/api/kanban/cards/:id/duplicate` | Copia la tarjeta (con su estado) justo debajo; devuelve la copia | 201, 400, 404, 409 |
 | PATCH | `/api/kanban/cards/:id/move` | Mueve la tarjeta a `columnId` y `position` (opcional) | 200, 400, 404, 409 |
 | DELETE | `/api/kanban/cards/:id` | Elimina la tarjeta | 204, 400, 404 |
 
@@ -438,7 +447,7 @@ curl -X PATCH http://localhost:3000/api/kanban/cards/1/move \
 npm test
 ```
 
-Requiere PostgreSQL en marcha y haber ejecutado `npm run db:setup`. Hay 159 pruebas:
+Requiere PostgreSQL en marcha y haber ejecutado `npm run db:setup`. Hay 171 pruebas:
 
 - `tests/validator.test.js`: pruebas unitarias de validación (sin base de datos).
 - `tests/tasks.api.test.js`: pruebas de integración reales. Envían peticiones HTTP a la
@@ -476,9 +485,10 @@ Las pruebas no tocan la base de desarrollo `taskflow`.
   avisa si dejan de coincidir.
 - Las tarjetas del Kanban son independientes de las tareas de la lista: mover una tarjeta no
   cambia el estado de ninguna tarea.
-- Kanban: sin edición simultánea (un solo usuario). Las tarjetas y las columnas solo se mueven
-  arrastrándolas con el ratón: no hay alternativa con teclado ni lector de pantalla, y el arrastre
-  no se ha probado en pantallas táctiles (allí no se pueden reordenar). «Añadir sección» aparece al
+- Kanban: sin edición simultánea (un solo usuario). Las columnas solo se reordenan arrastrándolas,
+  y las tarjetas solo se reordenan dentro de su columna arrastrándolas: no hay alternativa con
+  teclado ni lector de pantalla, y el arrastre no se ha probado en pantallas táctiles. Para pasar
+  una tarea a otra columna sí hay alternativa: «Mover» en su menú. «Añadir sección» aparece al
   pasar el ratón (o con el foco del teclado), así que en pantallas táctiles solo queda el
   formulario, que añade al final.
 - Kanban: el límite WIP se eliminó. En una base creada antes, la columna `wip_limit` de

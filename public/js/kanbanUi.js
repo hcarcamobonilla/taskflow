@@ -40,17 +40,49 @@ export function clearBoard() {
 
 /* ---------- Tarjetas ---------- */
 
-function buildCard(card, handlers) {
-  const item = el('li', 'card');
+// Menú de opciones (tres puntos) que usan las columnas y las tareas. <details> se abre y se
+// cierra sin JavaScript y funciona con teclado; kanban.js lo cierra al elegir una opción,
+// al hacer clic fuera o al pulsar Escape.
+// options: [{ text, label, onClick, danger, disabled }]
+function buildOptionsMenu(menuLabel, options) {
+  const menu = el('details', 'options-menu');
+  const summary = el('summary', '', '⋯');
+  summary.setAttribute('aria-label', menuLabel);
+  summary.dataset.action = 'menu';
+  menu.append(summary);
+
+  const items = el('div', 'options-menu-items');
+  for (const { text, label, onClick, danger, disabled } of options) {
+    const node = button(text, danger ? 'button button-small button-danger' : 'button button-small', label);
+    node.disabled = Boolean(disabled);
+    node.addEventListener('click', onClick);
+    items.append(node);
+  }
+  menu.append(items);
+  return menu;
+}
+
+function buildCard(card, board, handlers) {
+  const item = el('li', card.completed ? 'card card-completed' : 'card');
   item.dataset.cardId = card.id;
   item.draggable = true;
   item.tabIndex = -1; // permite devolverle el foco después de volver a pintar el tablero
 
+  const title = `«${card.title}»`;
+
+  // Círculo arriba a la izquierda: marca la tarea como completada (o la desmarca).
+  const check = button('', 'card-check', card.completed ? `Marcar ${title} como pendiente` : `Marcar ${title} como completada`);
+  check.dataset.action = 'complete';
+  check.setAttribute('aria-pressed', String(card.completed));
+  check.append(el('span', 'card-check-mark', '✓'));
+  check.addEventListener('click', () => handlers.onToggleCard(card));
+
   // La prioridad va arriba del título, alineada a la izquierda.
+  const body = el('div', 'card-body');
   const priority = el('p', 'card-priority');
   priority.append(el('span', `badge badge-priority-${card.priority}`, `Prioridad ${PRIORITY_LABELS[card.priority].toLowerCase()}`));
-  item.append(priority, el('h4', 'card-title', card.title));
-  if (card.description) item.append(el('p', 'card-description', card.description));
+  body.append(priority, el('h4', 'card-title', card.title));
+  if (card.description) body.append(el('p', 'card-description', card.description));
 
   if (card.dueDate) {
     const meta = el('p', 'card-meta');
@@ -60,21 +92,19 @@ function buildCard(card, handlers) {
     due.append(time);
     if (card.dueDate < todayIso()) due.append(' ', el('strong', 'overdue', '(vencida)'));
     meta.append(due);
-    item.append(meta);
+    body.append(meta);
   }
 
-  const title = `«${card.title}»`;
-  const actions = el('div', 'card-actions');
+  const menu = buildOptionsMenu(`Opciones de la tarea ${title}`, [
+    { text: 'Editar', label: `Editar la tarea ${title}`, onClick: () => handlers.onEditCard(card) },
+    { text: 'Duplicar', label: `Duplicar la tarea ${title}`, onClick: () => handlers.onDuplicateCard(card),
+      disabled: board.columns.find((column) => String(column.id) === String(card.columnId))?.cards.length >= MAX_CARDS_PER_COLUMN },
+    { text: 'Mover', label: `Mover la tarea ${title} a otra columna`, onClick: () => handlers.onMoveCardTo(card),
+      disabled: board.columns.length < 2 },
+    { text: 'Eliminar', label: `Eliminar la tarea ${title}`, onClick: () => handlers.onDeleteCard(card), danger: true },
+  ]);
 
-  const editButton = button('Editar', 'button button-small', `Editar ${title}`);
-  editButton.dataset.action = 'edit';
-  editButton.addEventListener('click', () => handlers.onEditCard(card));
-
-  const deleteButton = button('Eliminar', 'button button-small button-danger', `Eliminar ${title}`);
-  deleteButton.addEventListener('click', () => handlers.onDeleteCard(card));
-
-  actions.append(editButton, deleteButton);
-  item.append(actions);
+  item.append(check, body, menu);
   return item;
 }
 
@@ -89,35 +119,16 @@ function buildColumnCount(column) {
   return node;
 }
 
-// Menú de opciones de la columna (tres puntos arriba a la derecha). <details> se abre y se
-// cierra sin JavaScript y funciona con teclado; kanban.js lo cierra al elegir una opción,
-// al hacer clic fuera o al pulsar Escape.
 function buildColumnMenu(column, board, handlers) {
-  const menu = el('details', 'column-menu');
-  const summary = el('summary', '', '⋯');
-  summary.setAttribute('aria-label', `Opciones de la columna «${column.name}»`);
-  menu.append(summary);
-
-  const items = el('div', 'column-menu-items');
   const name = `«${column.name}»`;
-
-  const editButton = button('Editar', 'button button-small', `Editar la columna ${name}`);
-  editButton.addEventListener('click', () => handlers.onEditColumn(column));
-
-  const duplicateButton = button('Duplicar', 'button button-small', `Duplicar la columna ${name}`);
-  duplicateButton.disabled = board.columns.length >= MAX_COLUMNS;
-  duplicateButton.addEventListener('click', () => handlers.onDuplicateColumn(column));
-
-  const deleteButton = button('Eliminar', 'button button-small button-danger', `Eliminar la columna ${name}`);
-  deleteButton.addEventListener('click', () => handlers.onDeleteColumn(column));
-
-  const clearButton = button('Vaciar', 'button button-small button-danger', `Vaciar la columna ${name}`);
-  clearButton.disabled = column.cards.length === 0;
-  clearButton.addEventListener('click', () => handlers.onClearColumn(column));
-
-  items.append(editButton, duplicateButton, deleteButton, clearButton);
-  menu.append(items);
-  return menu;
+  return buildOptionsMenu(`Opciones de la columna ${name}`, [
+    { text: 'Editar', label: `Editar la columna ${name}`, onClick: () => handlers.onEditColumn(column) },
+    { text: 'Duplicar', label: `Duplicar la columna ${name}`, onClick: () => handlers.onDuplicateColumn(column),
+      disabled: board.columns.length >= MAX_COLUMNS },
+    { text: 'Eliminar', label: `Eliminar la columna ${name}`, onClick: () => handlers.onDeleteColumn(column), danger: true },
+    { text: 'Vaciar', label: `Vaciar la columna ${name}`, onClick: () => handlers.onClearColumn(column),
+      danger: true, disabled: column.cards.length === 0 },
+  ]);
 }
 
 // Asa para arrastrar la columna. Es decorativa para lector de pantalla: el equivalente
@@ -145,7 +156,7 @@ function buildColumn(column, board, handlers) {
 
   const list = el('ul', 'card-list');
   list.setAttribute('aria-label', `Tarjetas de «${column.name}»`);
-  list.append(...column.cards.map((card) => buildCard(card, handlers)));
+  list.append(...column.cards.map((card) => buildCard(card, board, handlers)));
   if (column.cards.length === 0) list.append(el('li', 'card-list-empty', 'Sin tarjetas'));
   item.append(list);
 
@@ -159,12 +170,14 @@ function buildColumn(column, board, handlers) {
   return item;
 }
 
-// Hueco entre dos columnas. Con el ratón encima (o con el foco) muestra «Añadir sección», que
-// crea una columna nueva en esa posición. Si el tablero está lleno solo queda el hueco.
+// Hueco entre dos columnas. Con el ratón encima (o con el foco) se ve una línea y «Añadir sección»,
+// que crea una columna nueva en esa posición. Si el tablero está lleno solo queda el hueco.
 function buildSectionGap(position, board, handlers) {
   const gap = el('li', 'section-gap');
   if (board.columns.length >= MAX_COLUMNS) return gap;
-  const addButton = button('Añadir sección', 'add-section-button', `Añadir una sección en la posición ${position + 1}`);
+  // El botón ocupa todo el hueco: se ve una línea vertical y, más abajo, el texto «Añadir sección».
+  const addButton = button('', 'add-section-button', `Añadir una sección en la posición ${position + 1}`);
+  addButton.append(el('span', 'add-section-label', 'Añadir sección'));
   addButton.addEventListener('click', () => handlers.onAddSection(position));
   gap.append(addButton);
   return gap;
@@ -316,6 +329,26 @@ export function readCardDialog() {
 
 export const showCardDialogErrors = (details) => showErrors($('card-form'), 'card-error', CARD_FIELDS, details);
 export const closeCardDialog = () => $('card-dialog').close();
+
+// Diálogo «Mover tarea»: lista las demás columnas (la tarea va al final de la elegida).
+export function openMoveDialog(card, columns) {
+  const select = $('move-column');
+  select.replaceChildren(
+    ...columns
+      .filter((column) => String(column.id) !== String(card.columnId))
+      .map((column) => {
+        const option = el('option', '', column.name);
+        option.value = column.id;
+        return option;
+      })
+  );
+  $('move-dialog-heading').textContent = `Mover «${card.title}»`;
+  $('move-dialog').showModal();
+  select.focus();
+}
+
+export const readMoveDialog = () => $('move-column').value;
+export const closeMoveDialog = () => $('move-dialog').close();
 
 // Mensaje de error general dentro de un diálogo abierto (los mensajes de la página quedan detrás).
 export function showDialogMessage(dialogId, text) {

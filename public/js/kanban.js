@@ -30,7 +30,10 @@ const handlers = {
   onClearColumn: handleClearColumn,
   onDeleteColumn: handleDeleteColumn,
   onAddCard: handleAddCard,
+  onToggleCard: handleToggleCard,
   onEditCard: handleEditCard,
+  onDuplicateCard: handleDuplicateCard,
+  onMoveCardTo: handleOpenMoveDialog,
   onDeleteCard: handleDeleteCard,
 };
 
@@ -159,9 +162,9 @@ async function handleSaveProject() {
 
 // Cierra los menús abiertos al elegir una opción o al hacer clic fuera de ellos.
 function handleDocumentClick(event) {
-  const own = event.target.closest('.column-menu');
-  const choseOption = event.target.closest('.column-menu-items button');
-  for (const menu of document.querySelectorAll('.column-menu[open]')) {
+  const own = event.target.closest('.options-menu');
+  const choseOption = event.target.closest('.options-menu-items button');
+  for (const menu of document.querySelectorAll('.options-menu[open]')) {
     if (menu !== own || choseOption) menu.open = false;
   }
 }
@@ -169,7 +172,7 @@ function handleDocumentClick(event) {
 // Escape cierra el menú abierto y devuelve el foco a sus tres puntos.
 function handleDocumentKeydown(event) {
   if (event.key !== 'Escape') return;
-  const menu = document.querySelector('.column-menu[open]');
+  const menu = document.querySelector('.options-menu[open]');
   if (!menu) return;
   menu.open = false;
   menu.querySelector('summary').focus();
@@ -223,7 +226,44 @@ async function handleSubmitCardDialog(event) {
   boardUi.closeCardDialog();
   ui.showMessage(card ? 'Cambios guardados correctamente.' : 'Tarjeta creada correctamente.');
   await load();
-  boardUi.focusCard(saved.id, 'edit');
+  boardUi.focusCard(saved.id, 'menu');
+}
+
+// Círculo de la tarea: la marca como completada o la deja pendiente.
+async function handleToggleCard(card) {
+  await applyChange(() => store.setCardCompleted(card.id, !card.completed));
+  boardUi.focusCard(card.id, 'complete');
+}
+
+async function handleDuplicateCard(card) {
+  ui.clearMessage();
+  let copy;
+  try {
+    copy = await store.duplicateCard(card.id);
+    ui.showMessage('Tarea duplicada.');
+  } catch (error) {
+    ui.showMessage(error.message, 'error');
+  }
+  await load();
+  boardUi.focusCard(copy ? copy.id : card.id, 'menu');
+}
+
+/* ---------- Mover una tarea a otra columna (alternativa a arrastrar) ---------- */
+
+let movingCard = null;
+
+function handleOpenMoveDialog(card) {
+  movingCard = card;
+  boardUi.showDialogMessage('move-dialog', '');
+  boardUi.openMoveDialog(card, currentBoard.columns);
+}
+
+async function handleSubmitMoveDialog(event) {
+  event.preventDefault();
+  const card = movingCard;
+  const columnId = boardUi.readMoveDialog();
+  boardUi.closeMoveDialog();
+  if (card && columnId) await handleMoveCard(card, columnId, null);
 }
 
 async function handleDeleteCard(card) {
@@ -275,6 +315,8 @@ export function init(selectedStore) {
   document.getElementById('card-form').addEventListener('submit', handleSubmitCardDialog);
   document.getElementById('column-cancel-button').addEventListener('click', boardUi.closeColumnDialog);
   document.getElementById('card-cancel-button').addEventListener('click', boardUi.closeCardDialog);
+  document.getElementById('move-form').addEventListener('submit', handleSubmitMoveDialog);
+  document.getElementById('move-cancel-button').addEventListener('click', boardUi.closeMoveDialog);
   document.getElementById('export-board-button').addEventListener('click', handleExport);
 
   // `change` se dispara al salir del campo (o con Enter en el título) solo si el texto cambió.

@@ -201,9 +201,9 @@
       </div>
 
       <p class="kanban-help">
-        Crea tus columnas y añade tareas. Arrastra una tarea para moverla y una columna por el asa ⠿
-        para reordenarla. Pasa el ratón entre dos columnas para añadir una sección nueva. Las tareas
-        del tablero son independientes de las tareas de la lista.
+        Crea tus columnas y añade tareas. Arrastra una tarea para moverla (o usa «Mover» en su menú ⋯)
+        y una columna por el asa ⠿ para reordenarla. Pasa el ratón entre dos columnas para añadir una
+        sección nueva. Las tareas del tablero son independientes de las tareas de la lista.
       </p>
 
       <form id="column-form" class="column-form" novalidate>
@@ -259,6 +259,25 @@
         <div class="form-actions">
           <button type="submit" id="card-submit-button" class="button button-primary">Crear tarjeta</button>
           <button type="button" id="card-cancel-button" class="button">Cancelar</button>
+        </div>
+      </form>
+    </dialog>
+
+    <!-- Diálogo para mover una tarea a otra columna. -->
+    <dialog id="move-dialog" class="dialog" aria-labelledby="move-dialog-heading">
+      <form id="move-form" novalidate>
+        <h2 id="move-dialog-heading">Mover tarea</h2>
+        <p id="move-dialog-message" class="message message-error" role="alert" hidden></p>
+
+        <div class="field">
+          <label for="move-column">Mover a la columna</label>
+          <select id="move-column" name="columnId"></select>
+          <p class="field-help">La tarea queda al final de la columna elegida.</p>
+        </div>
+
+        <div class="form-actions">
+          <button type="submit" class="button button-primary">Mover</button>
+          <button type="button" id="move-cancel-button" class="button">Cancelar</button>
         </div>
       </form>
     </dialog>
