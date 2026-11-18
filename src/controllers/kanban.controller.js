@@ -71,10 +71,9 @@ async function updateCard(req, res) {
   res.json({ data: await service.updateCard(id, input) });
 }
 
-async function setCardCompleted(req, res) {
+async function completeCard(req, res) {
   const id = validator.parseId(req.params.id);
-  const completed = validator.validateCompleted(req.body);
-  res.json({ data: await service.setCardCompleted(id, completed) });
+  res.json({ data: await service.completeCard(id) });
 }
 
 async function duplicateCard(req, res) {
@@ -106,7 +105,7 @@ module.exports = {
   moveAllCards,
   createCard,
   updateCard,
-  setCardCompleted,
+  completeCard,
   duplicateCard,
   moveCard,
   removeCard,

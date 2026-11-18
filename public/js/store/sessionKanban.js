@@ -15,7 +15,6 @@ import {
   copyColumnName,
   validateProject,
   validateCard,
-  validateCompleted,
   validateColumnMove,
   validateCardMove,
   validateMoveAllCards,
@@ -52,10 +51,16 @@ function looksLikeColumn(item) {
   );
 }
 
-const EMPTY_PROJECT = { name: '', description: '' };
+const EMPTY_PROJECT = { name: '', description: '', completedCount: 0 };
 
 function looksLikeProject(item) {
-  return item !== null && typeof item === 'object' && typeof item.name === 'string' && typeof item.description === 'string';
+  return (
+    item !== null &&
+    typeof item === 'object' &&
+    typeof item.name === 'string' &&
+    typeof item.description === 'string' &&
+    (item.completedCount === undefined || (Number.isInteger(item.completedCount) && item.completedCount >= 0))
+  );
 }
 
 // Datos guardados: { project, columns }. Sin nada guardado, el tablero está vacío. El proyecto
@@ -69,7 +74,7 @@ function readData() {
     saved.columns.every(looksLikeColumn) &&
     (saved.project === undefined || looksLikeProject(saved.project));
   if (!isValid) throw corruptDataError();
-  return { project: saved.project || { ...EMPTY_PROJECT }, columns: saved.columns };
+  return { project: { ...EMPTY_PROJECT, ...saved.project }, columns: saved.columns };
 }
 
 function readColumns() {
@@ -88,14 +93,13 @@ function toColumn(column, position) {
   return { ...fields, position };
 }
 
-// `completed` puede faltar en tarjetas guardadas antes de que existiera: cuentan como sin completar.
 function toCard(card, columnId, position) {
-  return { ...card, completed: card.completed === true, columnId, position };
+  return { ...card, columnId, position };
 }
 
 function toBoard(columns, project) {
   return {
-    project: { name: project.name, description: project.description },
+    project: { ...project },
     columns: columns.map((column, position) => ({
       ...toColumn(column, position),
       cards: column.cards.map((card, index) => toCard(card, column.id, index)),
@@ -127,10 +131,13 @@ export async function getBoard() {
   return toBoard(columns, project);
 }
 
+// Guarda título y descripción; el contador de completadas se conserva.
 export async function updateProject(input) {
-  const project = validateProject(input);
-  writeJson(KANBAN_KEY, { project, columns: readColumns() });
-  return project;
+  const fields = validateProject(input);
+  const { project, columns } = readData();
+  const updated = { ...project, ...fields };
+  writeJson(KANBAN_KEY, { project: updated, columns });
+  return { ...updated };
 }
 
 // Crea una columna en la posición pedida (sin posición, al final).
@@ -219,7 +226,7 @@ export async function createCard(columnId, input) {
   const column = columns[findColumnIndexOrFail(columns, columnId)];
   if (column.cards.length >= MAX_CARDS_PER_COLUMN) throw columnFull();
   const timestamp = now();
-  const card = { id: newId(), ...fields, completed: false, createdAt: timestamp, updatedAt: timestamp };
+  const card = { id: newId(), ...fields, createdAt: timestamp, updatedAt: timestamp };
   column.cards.push(card);
   writeColumns(columns);
   return toCard(card, column.id, column.cards.length - 1);
@@ -234,16 +241,17 @@ export async function updateCard(id, input) {
   return toCard(column.cards[index], column.id, index);
 }
 
-export async function setCardCompleted(id, input) {
-  const completed = validateCompleted({ completed: input });
-  const columns = readColumns();
+// Completa una tarea: la elimina y suma uno al contador de completadas. Devuelve el proyecto.
+export async function completeCard(id) {
+  const { project, columns } = readData();
   const { column, index } = findCardOrFail(columns, id);
-  column.cards[index] = { ...column.cards[index], completed, updatedAt: now() };
-  writeColumns(columns);
-  return toCard(column.cards[index], column.id, index);
+  column.cards.splice(index, 1);
+  const updated = { ...project, completedCount: project.completedCount + 1 };
+  writeJson(KANBAN_KEY, { project: updated, columns });
+  return { ...updated };
 }
 
-// Copia la tarjeta (con su estado) justo debajo de la original, en la misma columna.
+// Copia la tarjeta justo debajo de la original, en la misma columna.
 export async function duplicateCard(id) {
   const columns = readColumns();
   const { column, index } = findCardOrFail(columns, id);

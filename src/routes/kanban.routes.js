@@ -20,7 +20,7 @@ router.delete('/columns/:id/cards', controller.clearColumn);
 router.post('/columns/:id/move-cards', controller.moveAllCards);
 
 router.put('/cards/:id', controller.updateCard);
-router.patch('/cards/:id/completed', controller.setCardCompleted);
+router.post('/cards/:id/complete', controller.completeCard);
 router.post('/cards/:id/duplicate', controller.duplicateCard);
 router.patch('/cards/:id/move', controller.moveCard);
 router.delete('/cards/:id', controller.removeCard);

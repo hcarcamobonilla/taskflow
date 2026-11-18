@@ -12,9 +12,9 @@ const { MAX_COLUMNS, MAX_CARDS_PER_COLUMN, copyColumnName } = require('../valida
 const HttpError = require('../utils/HttpError');
 
 const columnNotFound = () => new HttpError(404, 'Columna no encontrada');
-const cardNotFound = () => new HttpError(404, 'Tarjeta no encontrada');
+const cardNotFound = () => new HttpError(404, 'Tarea no encontrada');
 const boardFull = () => new HttpError(409, `El tablero admite como máximo ${MAX_COLUMNS} columnas`);
-const columnFull = () => new HttpError(409, `Una columna admite como máximo ${MAX_CARDS_PER_COLUMN} tarjetas`);
+const columnFull = () => new HttpError(409, `Una columna admite como máximo ${MAX_CARDS_PER_COLUMN} tareas`);
 
 // Inserta `id` en la posición pedida. Sin posición, o si se pasa del final, va al final.
 function insertAt(ids, id, position) {
@@ -140,14 +140,21 @@ async function updateCard(id, input) {
   return card;
 }
 
-// Marca o desmarca una tarjeta como completada.
-async function setCardCompleted(id, completed) {
-  const card = await repository.updateCardCompleted(pool, id, completed);
-  if (!card) throw cardNotFound();
-  return card;
+// Completa una tarea: la elimina, cierra el hueco que deja en su columna y suma uno al contador
+// de completadas. Todo en una transacción: no puede quedar la tarea borrada sin contar (ni al revés).
+// Devuelve el proyecto con el contador actualizado.
+function completeCard(id) {
+  return withTransaction(async (db) => {
+    const card = await repository.findCard(db, id);
+    if (!card) throw cardNotFound();
+    await repository.lockColumns(db, [card.columnId]);
+    await repository.deleteCard(db, id);
+    await repository.saveCardOrder(db, card.columnId, await repository.findCardIds(db, card.columnId));
+    return repository.incrementCompletedCount(db);
+  });
 }
 
-// Copia la tarjeta (con su estado) justo debajo de la original, en la misma columna.
+// Copia la tarjeta justo debajo de la original, en la misma columna.
 function duplicateCard(id) {
   return withTransaction(async (db) => {
     const card = await repository.findCard(db, id);
@@ -207,7 +214,7 @@ module.exports = {
   moveAllCards,
   createCard,
   updateCard,
-  setCardCompleted,
+  completeCard,
   duplicateCard,
   moveCard,
   removeCard,

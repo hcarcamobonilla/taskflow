@@ -59,8 +59,9 @@ export function updateCard(id, card) {
   return request(`/cards/${id}`, { method: 'PUT', body: card });
 }
 
-export function setCardCompleted(id, completed) {
-  return request(`/cards/${id}/completed`, { method: 'PATCH', body: { completed } });
+// Completa la tarea: se elimina y suma al contador. Devuelve el proyecto con el contador nuevo.
+export function completeCard(id) {
+  return request(`/cards/${id}/complete`, { method: 'POST' });
 }
 
 export function duplicateCard(id) {

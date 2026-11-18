@@ -147,15 +147,6 @@ function validateCard(body) {
   return card;
 }
 
-// PATCH /cards/:id/completed -> { completed: true | false } (obligatorio).
-function validateCompleted(body) {
-  requireObject(body);
-  if (typeof body.completed !== 'boolean') {
-    fail([{ field: 'completed', message: 'completed debe ser true o false' }]);
-  }
-  return body.completed;
-}
-
 // PATCH /columns/:id/move -> nueva posición de la columna (obligatoria).
 function validateColumnMove(body) {
   requireObject(body);
@@ -191,7 +182,6 @@ module.exports = {
   copyColumnName,
   validateProject,
   validateCard,
-  validateCompleted,
   validateColumnMove,
   validateCardMove,
   validateMoveAllCards,

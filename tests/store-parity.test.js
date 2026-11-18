@@ -176,7 +176,7 @@ const kanbanApi = (() => {
     missingId: 999999,
     getBoard: () => send('get', ''),
     updateProject: (body) => send('put', '/project', body),
-    setCardCompleted: (id, completed) => send('patch', `/cards/${id}/completed`, { completed }),
+    completeCard: (id) => send('post', `/cards/${id}/complete`),
     duplicateCard: (id) => send('post', `/cards/${id}/duplicate`),
     createColumn: (body) => send('post', '/columns', body),
     duplicateColumn: (id) => send('post', `/columns/${id}/duplicate`),
@@ -200,7 +200,7 @@ const kanbanBrowser = (() => {
       return kanbanFailure(error.status, error.message, error.details);
     }
   };
-  const names = ['getBoard', 'updateProject', 'createColumn', 'duplicateColumn', 'setCardCompleted', 'duplicateCard', 'updateColumn', 'moveColumn', 'deleteColumn', 'clearColumn',
+  const names = ['getBoard', 'updateProject', 'createColumn', 'duplicateColumn', 'completeCard', 'duplicateCard', 'updateColumn', 'moveColumn', 'deleteColumn', 'clearColumn',
     'moveAllCards', 'createCard', 'updateCard', 'moveCard', 'deleteCard'];
   return { missingId: 'no-existe', ...Object.fromEntries(names.map((name) => [name, call(name)])) };
 })();
@@ -282,9 +282,6 @@ describe('Paridad del tablero Kanban: API (PostgreSQL) / sessionStorage', () => 
       ['updateProject', { description: 'y'.repeat(301) }],
       ['updateProject', { name: 7, description: false }],
       ['updateProject', []],
-      ['setCardCompleted', card('A'), 'true'],
-      ['setCardCompleted', card('A'), 1],
-      ['setCardCompleted', card('A'), null],
       ['updateColumn', col('Hecho'), { name: '' }],
       ['createCard', col('Hecho'), {}],
       ['createCard', col('Hecho'), { title: 'x'.repeat(151) }],
@@ -313,7 +310,7 @@ describe('Paridad del tablero Kanban: API (PostgreSQL) / sessionStorage', () => 
       ['deleteColumn', MISSING],
       ['clearColumn', MISSING],
       ['duplicateColumn', MISSING],
-      ['setCardCompleted', MISSING, true],
+      ['completeCard', MISSING],
       ['duplicateCard', MISSING],
       ['moveAllCards', MISSING, col('Hecho')],
       ['moveAllCards', col('Por hacer'), MISSING],
@@ -403,24 +400,20 @@ describe('Paridad del tablero Kanban: API (PostgreSQL) / sessionStorage', () => 
     );
   });
 
-  test('completar y duplicar tarjetas produce los mismos datos y el mismo orden', async () => {
+  test('completar y duplicar tarjetas produce los mismos datos, el mismo orden y el mismo contador', async () => {
     const board = await assertSameKanban([
       ...BASE_BOARD,
-      ['setCardCompleted', card('B'), true],
       ['duplicateCard', card('B')],
       ['updateCard', card('A'), { title: 'A editada' }],
-      ['setCardCompleted', card('A'), true],
-      ['setCardCompleted', card('B'), false],
+      ['completeCard', card('A')],
+      ['completeCard', card('A')], // ya no existe: el mismo 404 y no vuelve a contar
+      ['updateProject', { name: 'Mi proyecto' }], // no reinicia el contador
+      ['completeCard', card('C')],
       ['duplicateColumn', col('Por hacer')],
     ]);
-    assert.deepEqual(
-      board.columns[0].cards.map((item) => [item.title, item.completed]),
-      [['A editada', true], ['B', false], ['B', true], ['C', false]]
-    );
-    assert.deepEqual(
-      board.columns[1].cards.map((item) => [item.title, item.completed]),
-      [['A editada', true], ['B', false], ['B', true], ['C', false]]
-    );
+    assert.deepEqual(board.columns[0].cards.map((item) => item.title), ['B', 'B']);
+    assert.deepEqual(board.columns[1].cards.map((item) => item.title), ['B', 'B']);
+    assert.deepEqual(board.project, { name: 'Mi proyecto', description: '', completedCount: 2 });
   });
 
   test('el título y la descripción del proyecto se guardan igual y no los toca ningún otro cambio', async () => {
@@ -433,7 +426,7 @@ describe('Paridad del tablero Kanban: API (PostgreSQL) / sessionStorage', () => 
       ['updateProject', {}],
       ['updateProject', { name: 'Final', description: 'Descripción final' }],
     ]);
-    assert.deepEqual(board.project, { name: 'Final', description: 'Descripción final' });
+    assert.deepEqual(board.project, { name: 'Final', description: 'Descripción final', completedCount: 0 });
   });
 
   test('los topes de columnas y de tarjetas se aplican igual (409)', async () => {

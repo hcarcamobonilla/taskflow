@@ -44,9 +44,9 @@ function isPosition(value) {
 /* ---------- Errores de negocio (mismos textos que el servidor) ---------- */
 
 export const columnNotFound = () => new StoreError('Columna no encontrada', 404);
-export const cardNotFound = () => new StoreError('Tarjeta no encontrada', 404);
+export const cardNotFound = () => new StoreError('Tarea no encontrada', 404);
 export const boardFull = () => new StoreError(`El tablero admite como máximo ${MAX_COLUMNS} columnas`, 409);
-export const columnFull = () => new StoreError(`Una columna admite como máximo ${MAX_CARDS_PER_COLUMN} tarjetas`, 409);
+export const columnFull = () => new StoreError(`Una columna admite como máximo ${MAX_CARDS_PER_COLUMN} tareas`, 409);
 
 /* ---------- Validación ---------- */
 
@@ -145,15 +145,6 @@ export function validateCard(body) {
   return card;
 }
 
-// Estado «completada» de una tarjeta (obligatorio, true o false).
-export function validateCompleted(body) {
-  requireObject(body);
-  if (typeof body.completed !== 'boolean') {
-    fail([{ field: 'completed', message: 'completed debe ser true o false' }]);
-  }
-  return body.completed;
-}
-
 // Nueva posición de una columna (obligatoria).
 export function validateColumnMove(body) {
   requireObject(body);
@@ -201,7 +192,11 @@ export function toExport(board, exportedAt) {
     type: 'kanban-board',
     version: 2,
     exportedAt,
-    project: { name: board.project.name, description: board.project.description },
+    project: {
+      name: board.project.name,
+      description: board.project.description,
+      completedTasks: board.project.completedCount,
+    },
     columns: board.columns.map((column) => ({
       name: column.name,
       cards: column.cards.map((card) => ({
@@ -209,7 +204,6 @@ export function toExport(board, exportedAt) {
         description: card.description,
         priority: card.priority,
         dueDate: card.dueDate,
-        completed: card.completed,
       })),
     })),
   };

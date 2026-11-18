@@ -51,13 +51,9 @@ CREATE TABLE IF NOT EXISTS kanban_cards (
               CHECK (priority IN ('low', 'medium', 'high')),
   due_date    DATE,
   position    INTEGER NOT NULL CHECK (position >= 0),
-  completed   BOOLEAN NOT NULL DEFAULT false,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-
--- Para bases creadas antes de que existiera «completada» (no hace nada si la columna ya está).
-ALTER TABLE kanban_cards ADD COLUMN IF NOT EXISTS completed BOOLEAN NOT NULL DEFAULT false;
 
 CREATE INDEX IF NOT EXISTS idx_kanban_cards_column ON kanban_cards (column_id, position);
 
@@ -69,14 +65,20 @@ CREATE OR REPLACE TRIGGER kanban_cards_set_updated_at
   BEFORE UPDATE ON kanban_cards
   FOR EACH ROW EXECUTE FUNCTION set_updated_at();
 
--- Título y descripción del proyecto que muestra el tablero. Hay una sola fila (id = 1);
--- una cadena vacía significa "sin definir".
+-- Datos del tablero como proyecto. Hay una sola fila (id = 1).
+--   name y description: una cadena vacía significa "sin definir".
+--   completed_count: cuántas tareas se han completado (al completarse, la tarea se elimina).
 CREATE TABLE IF NOT EXISTS kanban_project (
-  id          SMALLINT PRIMARY KEY CHECK (id = 1),
-  name        VARCHAR(100) NOT NULL DEFAULT '',
-  description VARCHAR(300) NOT NULL DEFAULT '',
-  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+  id              SMALLINT PRIMARY KEY CHECK (id = 1),
+  name            VARCHAR(100) NOT NULL DEFAULT '',
+  description     VARCHAR(300) NOT NULL DEFAULT '',
+  completed_count INTEGER NOT NULL DEFAULT 0 CHECK (completed_count >= 0),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Para bases creadas antes de que existiera el contador (no hace nada si la columna ya está).
+ALTER TABLE kanban_project
+  ADD COLUMN IF NOT EXISTS completed_count INTEGER NOT NULL DEFAULT 0 CHECK (completed_count >= 0);
 
 INSERT INTO kanban_project (id) VALUES (1) ON CONFLICT (id) DO NOTHING;
 

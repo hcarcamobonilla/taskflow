@@ -11,7 +11,7 @@ const COLUMN_FIELDS = `
 
 const CARD_FIELDS = `
   id, column_id AS "columnId", title, description, priority,
-  due_date AS "dueDate", completed, position, created_at AS "createdAt", updated_at AS "updatedAt"`;
+  due_date AS "dueDate", position, created_at AS "createdAt", updated_at AS "updatedAt"`;
 
 /* ---------- Columnas ---------- */
 
@@ -99,13 +99,12 @@ async function findCardIds(db, columnId) {
   return rows.map((row) => row.id);
 }
 
-// `completed` solo viene en las copias (duplicar); una tarjeta nueva empieza sin completar.
-async function insertCard(db, columnId, { title, description, priority, dueDate, completed = false }, position) {
+async function insertCard(db, columnId, { title, description, priority, dueDate }, position) {
   const { rows } = await db.query(
-    `INSERT INTO kanban_cards (column_id, title, description, priority, due_date, completed, position)
-     VALUES ($1, $2, $3, $4, $5, $6, $7)
+    `INSERT INTO kanban_cards (column_id, title, description, priority, due_date, position)
+     VALUES ($1, $2, $3, $4, $5, $6)
      RETURNING ${CARD_FIELDS}`,
-    [columnId, title, description, priority, dueDate, completed, position]
+    [columnId, title, description, priority, dueDate, position]
   );
   return rows[0];
 }
@@ -121,14 +120,6 @@ async function updateCard(db, id, { title, description, priority, dueDate }) {
   return rows[0] || null;
 }
 
-async function updateCardCompleted(db, id, completed) {
-  const { rows } = await db.query(
-    `UPDATE kanban_cards SET completed = $1 WHERE id = $2 RETURNING ${CARD_FIELDS}`,
-    [completed, id]
-  );
-  return rows[0] || null;
-}
-
 async function deleteCard(db, id) {
   await db.query('DELETE FROM kanban_cards WHERE id = $1', [id]);
 }
@@ -137,8 +128,8 @@ async function deleteCard(db, id) {
 // INSERT ... SELECT hace la copia en una sola consulta, sin pasar los datos por JavaScript.
 async function copyCards(db, sourceColumnId, targetColumnId) {
   await db.query(
-    `INSERT INTO kanban_cards (column_id, title, description, priority, due_date, completed, position)
-     SELECT $2, title, description, priority, due_date, completed, position
+    `INSERT INTO kanban_cards (column_id, title, description, priority, due_date, position)
+     SELECT $2, title, description, priority, due_date, position
      FROM kanban_cards WHERE column_id = $1
      ORDER BY position, id`,
     [sourceColumnId, targetColumnId]
@@ -163,19 +154,32 @@ async function saveCardOrder(db, columnId, ids) {
 
 /* ---------- Proyecto (título y descripción del tablero) ---------- */
 
+const PROJECT_FIELDS = 'name, description, completed_count AS "completedCount"';
+
 // Sin fila guardada (base creada antes de esta función) se devuelven los valores vacíos.
 async function findProject(db) {
-  const { rows } = await db.query('SELECT name, description FROM kanban_project WHERE id = 1');
-  return rows[0] || { name: '', description: '' };
+  const { rows } = await db.query(`SELECT ${PROJECT_FIELDS} FROM kanban_project WHERE id = 1`);
+  return rows[0] || { name: '', description: '', completedCount: 0 };
 }
 
-// Inserta la fila única o, si ya existe, la actualiza (UPSERT).
+// Inserta la fila única o, si ya existe, la actualiza (UPSERT). No toca el contador de completadas.
 async function saveProject(db, { name, description }) {
   const { rows } = await db.query(
     `INSERT INTO kanban_project (id, name, description) VALUES (1, $1, $2)
      ON CONFLICT (id) DO UPDATE SET name = EXCLUDED.name, description = EXCLUDED.description
-     RETURNING name, description`,
+     RETURNING ${PROJECT_FIELDS}`,
     [name, description]
+  );
+  return rows[0];
+}
+
+// Suma una tarea completada. La suma la hace la base (completed_count + 1), no JavaScript,
+// para que dos peticiones a la vez no se pisen.
+async function incrementCompletedCount(db) {
+  const { rows } = await db.query(
+    `INSERT INTO kanban_project (id, completed_count) VALUES (1, 1)
+     ON CONFLICT (id) DO UPDATE SET completed_count = kanban_project.completed_count + 1
+     RETURNING ${PROJECT_FIELDS}`
   );
   return rows[0];
 }
@@ -194,11 +198,11 @@ module.exports = {
   findCardIds,
   insertCard,
   updateCard,
-  updateCardCompleted,
   deleteCard,
   copyCards,
   deleteCardsOfColumn,
   saveCardOrder,
   findProject,
   saveProject,
+  incrementCompletedCount,
 };

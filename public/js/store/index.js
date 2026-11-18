@@ -11,7 +11,7 @@
 //
 // y las del tablero Kanban (apiKanban.js y sessionKanban.js):
 //
-//   getBoard()                           -> { project: { name, description }, columns: [columna con sus tarjetas en `cards`] }
+//   getBoard()                           -> { project: { name, description, completedCount }, columns: [columna con sus tarjetas en `cards`] }
 //   updateProject({ name, description }) -> proyecto actualizado
 //   createColumn({ name, position })     -> columna creada (sin position, al final)
 //   duplicateColumn(id)                  -> copia de la columna con sus tarjetas, a su derecha
@@ -22,7 +22,7 @@
 //   moveAllCards(id, targetColumnId)     -> tablero completo
 //   createCard(columnId, card)           -> tarjeta creada
 //   updateCard(id, card)                 -> tarjeta actualizada
-//   setCardCompleted(id, completed)      -> tarjeta actualizada (marca o desmarca «completada»)
+//   completeCard(id)                     -> proyecto (la tarea se elimina y suma al contador de completadas)
 //   duplicateCard(id)                    -> copia de la tarjeta, justo debajo de la original
 //   moveCard(id, columnId, position)     -> tarjeta movida
 //   deleteCard(id)                       -> null

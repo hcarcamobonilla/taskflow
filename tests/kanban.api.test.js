@@ -52,7 +52,7 @@ async function assertPositionsAreConsecutive() {
 
 describe('GET /api/kanban', () => {
   test('devuelve un tablero vacío cuando no hay columnas', async () => {
-    assert.deepEqual(await getBoard(), { project: { name: '', description: '' }, columns: [] });
+    assert.deepEqual(await getBoard(), { project: { name: '', description: '', completedCount: 0 }, columns: [] });
   });
 
   test('devuelve las columnas en orden, cada una con sus tarjetas en orden', async () => {
@@ -68,7 +68,7 @@ describe('GET /api/kanban', () => {
     const [, cardB] = board.columns[0].cards;
     assert.deepEqual(
       { ...cardB, createdAt: undefined, updatedAt: undefined },
-      { id: 2, columnId: todo.id, title: 'B', description: 'Detalle', priority: 'high', dueDate: '2026-12-01', completed: false, position: 1, createdAt: undefined, updatedAt: undefined }
+      { id: 2, columnId: todo.id, title: 'B', description: 'Detalle', priority: 'high', dueDate: '2026-12-01', position: 1, createdAt: undefined, updatedAt: undefined }
     );
     assert.ok(!Number.isNaN(Date.parse(cardB.createdAt)));
   });
@@ -238,7 +238,7 @@ describe('tarjetas', () => {
     );
     const res = await request(app).post(`/api/kanban/columns/${column.id}/cards`).send({ title: 'Una más' });
     assert.equal(res.status, 409);
-    assert.match(res.body.error.message, /como máximo 50 tarjetas/);
+    assert.match(res.body.error.message, /como máximo 50 tareas/);
   });
 
   test('PUT edita la tarjeta sin cambiar su columna ni su posición', async () => {
@@ -408,24 +408,24 @@ describe('transacciones', () => {
 
 describe('proyecto (título y descripción del tablero)', () => {
   test('GET /api/kanban devuelve el proyecto vacío al principio', async () => {
-    assert.deepEqual((await getBoard()).project, { name: '', description: '' });
+    assert.deepEqual((await getBoard()).project, { name: '', description: '', completedCount: 0 });
   });
 
   test('PUT /project guarda título y descripción en PostgreSQL y el tablero los devuelve', async () => {
     const res = await request(app).put('/api/kanban/project').send({ name: '  Mi proyecto ', description: 'Algo breve' });
     assert.equal(res.status, 200);
-    assert.deepEqual(res.body.data, { name: 'Mi proyecto', description: 'Algo breve' });
+    assert.deepEqual(res.body.data, { name: 'Mi proyecto', description: 'Algo breve', completedCount: 0 });
 
     const { rows } = await pool.query('SELECT name, description FROM kanban_project');
     assert.deepEqual(rows, [{ name: 'Mi proyecto', description: 'Algo breve' }]);
-    assert.deepEqual((await getBoard()).project, { name: 'Mi proyecto', description: 'Algo breve' });
+    assert.deepEqual((await getBoard()).project, { name: 'Mi proyecto', description: 'Algo breve', completedCount: 0 });
   });
 
   test('PUT /project con campos vacíos o ausentes los deja sin definir', async () => {
     await request(app).put('/api/kanban/project').send({ name: 'X', description: 'Y' });
     const res = await request(app).put('/api/kanban/project').send({ name: '' });
     assert.equal(res.status, 200);
-    assert.deepEqual(res.body.data, { name: '', description: '' });
+    assert.deepEqual(res.body.data, { name: '', description: '', completedCount: 0 });
   });
 
   test('PUT /project rechaza textos demasiado largos o que no son texto', async () => {
@@ -440,53 +440,68 @@ describe('proyecto (título y descripción del tablero)', () => {
 });
 
 describe('tarjetas: completar y duplicar', () => {
-  test('PATCH completed marca y desmarca la tarjeta, la guarda y no cambia nada más', async () => {
-    const column = await addColumn('A');
-    const card = await addCard(column.id, 'Tarea', { priority: 'high' });
-    assert.equal(card.completed, false);
+  const complete = (id) => request(app).post(`/api/kanban/cards/${id}/complete`);
 
-    let res = await request(app).patch(`/api/kanban/cards/${card.id}/completed`).send({ completed: true });
+  test('POST complete elimina la tarea, renumera la columna y suma uno al contador', async () => {
+    const column = await addColumn('A');
+    await addCard(column.id, 'Uno');
+    const two = await addCard(column.id, 'Dos');
+    await addCard(column.id, 'Tres');
+
+    const res = await complete(two.id);
     assert.equal(res.status, 200);
-    assert.deepEqual([res.body.data.completed, res.body.data.title, res.body.data.priority, res.body.data.position], [true, 'Tarea', 'high', 0]);
-    const { rows } = await pool.query('SELECT completed FROM kanban_cards');
-    assert.deepEqual(rows, [{ completed: true }]);
+    assert.deepEqual(res.body.data, { name: '', description: '', completedCount: 1 });
 
-    res = await request(app).patch(`/api/kanban/cards/${card.id}/completed`).send({ completed: false });
-    assert.equal(res.body.data.completed, false);
+    const board = await getBoard();
+    assert.deepEqual(board.columns[0].cards.map((c) => [c.title, c.position]), [['Uno', 0], ['Tres', 1]]);
+    assert.equal(board.project.completedCount, 1);
+    const { rows } = await pool.query('SELECT completed_count FROM kanban_project');
+    assert.deepEqual(rows, [{ completed_count: 1 }]);
   });
 
-  test('PUT (editar) no cambia si la tarjeta está completada', async () => {
+  test('el contador acumula, y guardar título y descripción no lo reinicia', async () => {
     const column = await addColumn('A');
-    const card = await addCard(column.id, 'Tarea');
-    await request(app).patch(`/api/kanban/cards/${card.id}/completed`).send({ completed: true });
-    const res = await request(app).put(`/api/kanban/cards/${card.id}`).send({ title: 'Editada' });
-    assert.deepEqual([res.body.data.title, res.body.data.completed], ['Editada', true]);
+    const first = await addCard(column.id, 'Uno');
+    const second = await addCard(column.id, 'Dos');
+    await complete(first.id);
+    await request(app).put('/api/kanban/project').send({ name: 'Mi proyecto', description: 'Breve' });
+    const res = await complete(second.id);
+    assert.deepEqual(res.body.data, { name: 'Mi proyecto', description: 'Breve', completedCount: 2 });
+    assert.deepEqual((await getBoard()).columns[0].cards, []);
   });
 
-  test('PATCH completed rechaza valores que no son booleanos (400) y ids inexistentes (404)', async () => {
+  test('eliminar una tarea (DELETE) no suma al contador', async () => {
     const column = await addColumn('A');
-    const card = await addCard(column.id, 'Tarea');
-    for (const body of [{}, { completed: 'true' }, { completed: 1 }, { completed: null }]) {
-      const res = await request(app).patch(`/api/kanban/cards/${card.id}/completed`).send(body);
-      assert.equal(res.status, 400);
-      assert.deepEqual(res.body.error.details.map((d) => d.field), ['completed']);
-    }
-    assert.equal((await request(app).patch('/api/kanban/cards/999/completed').send({ completed: true })).status, 404);
-    assert.equal((await request(app).patch('/api/kanban/cards/abc/completed').send({ completed: true })).status, 400);
+    const card = await addCard(column.id, 'Uno');
+    await request(app).delete(`/api/kanban/cards/${card.id}`);
+    assert.equal((await getBoard()).project.completedCount, 0);
   });
 
-  test('POST duplicate copia la tarjeta (con su estado) justo debajo de la original', async () => {
+  test('POST complete responde 404 si no existe, 400 si el id es malformado y no cuenta nada', async () => {
+    assert.equal((await complete(999)).status, 404);
+    assert.equal((await complete('abc')).status, 400);
+    assert.equal((await getBoard()).project.completedCount, 0);
+  });
+
+  test('completar una tarea ya completada (ya eliminada) responde 404 y no vuelve a contar', async () => {
+    const column = await addColumn('A');
+    const card = await addCard(column.id, 'Uno');
+    assert.equal((await complete(card.id)).status, 200);
+    assert.equal((await complete(card.id)).status, 404);
+    assert.equal((await getBoard()).project.completedCount, 1);
+  });
+
+  test('POST duplicate copia la tarjeta justo debajo de la original', async () => {
     const column = await addColumn('A');
     const first = await addCard(column.id, 'Primera', { priority: 'high', dueDate: '2026-12-01', description: 'Detalle' });
     await addCard(column.id, 'Segunda');
-    await request(app).patch(`/api/kanban/cards/${first.id}/completed`).send({ completed: true });
 
     const res = await request(app).post(`/api/kanban/cards/${first.id}/duplicate`);
     assert.equal(res.status, 201);
     assert.notEqual(res.body.data.id, first.id);
     assert.deepEqual(
-      [res.body.data.title, res.body.data.priority, res.body.data.dueDate, res.body.data.description, res.body.data.completed, res.body.data.position, res.body.data.columnId],
-      ['Primera', 'high', '2026-12-01', 'Detalle', true, 1, column.id]
+      [res.body.data.title, res.body.data.priority, res.body.data.dueDate, res.body.data.description, res.body.data.position, res.body.data.columnId],
+      ['Primera', 'high', '2026-12-01', 'Detalle', 1, column.id]
     );
     assert.deepEqual((await getBoard()).columns[0].cards.map((c) => [c.title, c.position]), [['Primera', 0], ['Primera', 1], ['Segunda', 2]]);
   });
@@ -503,15 +518,6 @@ describe('tarjetas: completar y duplicar', () => {
     );
     const res = await request(app).post(`/api/kanban/cards/${first.id}/duplicate`);
     assert.equal(res.status, 409);
-    assert.match(res.body.error.message, /como máximo 50 tarjetas/);
-  });
-
-  test('al duplicar una columna, las tarjetas conservan su estado completada', async () => {
-    const column = await addColumn('A');
-    const card = await addCard(column.id, 'Hecha');
-    await addCard(column.id, 'Pendiente');
-    await request(app).patch(`/api/kanban/cards/${card.id}/completed`).send({ completed: true });
-    const copy = (await request(app).post(`/api/kanban/columns/${column.id}/duplicate`)).body.data;
-    assert.deepEqual(copy.cards.map((c) => [c.title, c.completed]), [['Hecha', true], ['Pendiente', false]]);
+    assert.match(res.body.error.message, /como máximo 50 tareas/);
   });
 });

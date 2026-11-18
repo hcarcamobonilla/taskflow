@@ -47,7 +47,7 @@ async function seedBoard() {
 
 describe('tablero y columnas', () => {
   test('el tablero empieza vacío y sin escribir nada en sessionStorage', async () => {
-    assert.deepEqual(await store.getBoard(), { project: { name: '', description: '' }, columns: [] });
+    assert.deepEqual(await store.getBoard(), { project: { name: '', description: '', completedCount: 0 }, columns: [] });
     assert.equal(storage.length, 0);
   });
 
@@ -107,52 +107,66 @@ describe('tablero y columnas', () => {
 
   test('updateProject guarda título y descripción sin tocar las columnas; las demás operaciones los conservan', async () => {
     const { todo } = await seedBoard();
-    assert.deepEqual(await store.updateProject({ name: '  Mi app ', description: 'Breve' }), { name: 'Mi app', description: 'Breve' });
+    assert.deepEqual(await store.updateProject({ name: '  Mi app ', description: 'Breve' }), { name: 'Mi app', description: 'Breve', completedCount: 0 });
     await store.createColumn({ name: 'Otra' });
     await store.moveColumn(todo.id, 2);
     await store.clearColumn(todo.id);
     const board = await store.getBoard();
-    assert.deepEqual(board.project, { name: 'Mi app', description: 'Breve' });
+    assert.deepEqual(board.project, { name: 'Mi app', description: 'Breve', completedCount: 0 });
     assert.equal(board.columns.length, 3);
 
     await assertRejects(store.updateProject({ name: 'x'.repeat(101) }), 400);
-    assert.deepEqual(await store.updateProject({}), { name: '', description: '' });
+    assert.deepEqual(await store.updateProject({}), { name: '', description: '', completedCount: 0 });
   });
 
   test('datos guardados antes de que existiera el proyecto se leen con el proyecto vacío', async () => {
     storage.setItem(store.KANBAN_KEY, JSON.stringify({ columns: [{ id: 'a', name: 'A', cards: [] }] }));
     const board = await store.getBoard();
-    assert.deepEqual(board.project, { name: '', description: '' });
+    assert.deepEqual(board.project, { name: '', description: '', completedCount: 0 });
     assert.equal(board.columns[0].name, 'A');
   });
 
-  test('setCardCompleted marca y desmarca, valida el valor y no cambia el resto de la tarjeta', async () => {
-    const { cards } = await seedBoard();
-    assert.equal(cards.A.completed, false);
-    const done = await store.setCardCompleted(cards.A.id, true);
-    assert.deepEqual([done.completed, done.title, done.position], [true, 'A', 0]);
-    const edited = await store.updateCard(cards.A.id, { title: 'A editada' });
-    assert.equal(edited.completed, true); // editar no desmarca
-    assert.equal((await store.setCardCompleted(cards.A.id, false)).completed, false);
-
-    await assertRejects(store.setCardCompleted(cards.A.id, 'true'), 400, (error) => {
-      assert.deepEqual(error.details.map((d) => d.field), ['completed']);
-    });
-    await assertRejects(store.setCardCompleted('no-existe', true), 404);
-  });
-
-  test('tarjetas guardadas antes de existir «completada» se leen como sin completar', async () => {
-    storage.setItem(store.KANBAN_KEY, JSON.stringify({
-      columns: [{ id: 'a', name: 'A', cards: [{ id: 'c', title: 'Vieja', priority: 'low' }] }],
-    }));
-    assert.equal((await store.getBoard()).columns[0].cards[0].completed, false);
-  });
-
-  test('duplicateCard copia la tarjeta con su estado justo debajo, con id nuevo', async () => {
+  test('completeCard elimina la tarea, renumera la columna y suma uno al contador', async () => {
     const { todo, cards } = await seedBoard();
-    await store.setCardCompleted(cards.B.id, true);
+    const project = await store.completeCard(cards.B.id);
+    assert.deepEqual(project, { name: '', description: '', completedCount: 1 });
+    assert.deepEqual(await summary(), { 'Por hacer': ['A', 'C'], 'En curso': ['X'] });
+    const board = await store.getBoard();
+    assert.deepEqual(board.columns[0].cards.map((c) => [c.title, c.position, c.columnId]), [['A', 0, todo.id], ['C', 1, todo.id]]);
+    assert.equal(board.project.completedCount, 1);
+
+    await store.completeCard(cards.A.id);
+    assert.equal((await store.getBoard()).project.completedCount, 2);
+  });
+
+  test('completar no se puede repetir (la tarea ya no existe) y eliminar no cuenta', async () => {
+    const { cards } = await seedBoard();
+    await store.completeCard(cards.A.id);
+    await assertRejects(store.completeCard(cards.A.id), 404);
+    await assertRejects(store.completeCard('no-existe'), 404);
+    await store.deleteCard(cards.B.id);
+    assert.equal((await store.getBoard()).project.completedCount, 1);
+  });
+
+  test('guardar título y descripción conserva el contador de completadas', async () => {
+    const { cards } = await seedBoard();
+    await store.completeCard(cards.A.id);
+    const project = await store.updateProject({ name: 'Mi app', description: 'Breve' });
+    assert.deepEqual(project, { name: 'Mi app', description: 'Breve', completedCount: 1 });
+    assert.equal((await store.getBoard()).project.completedCount, 1);
+  });
+
+  test('datos guardados con un contador no válido se consideran dañados', async () => {
+    for (const completedCount of [-1, 1.5, '3']) {
+      storage.setItem(store.KANBAN_KEY, JSON.stringify({ project: { name: '', description: '', completedCount }, columns: [] }));
+      await assertRejects(store.getBoard(), 0, (error) => assert.match(error.message, /dañados/));
+    }
+  });
+
+  test('duplicateCard copia la tarjeta justo debajo, con id nuevo', async () => {
+    const { todo, cards } = await seedBoard();
     const copy = await store.duplicateCard(cards.B.id);
-    assert.deepEqual([copy.title, copy.completed, copy.position, copy.columnId], ['B', true, 2, todo.id]);
+    assert.deepEqual([copy.title, copy.position, copy.columnId], ['B', 2, todo.id]);
     assert.notEqual(copy.id, cards.B.id);
     assert.deepEqual(await summary(), { 'Por hacer': ['A', 'B', 'B', 'C'], 'En curso': ['X'] });
     await assertRejects(store.duplicateCard('no-existe'), 404);
@@ -274,7 +288,7 @@ describe('datos del invitado', () => {
       await assertRejects(store.getBoard(), 0, (error) => assert.match(error.message, /dañados/));
     }
     await store.clearAll();
-    assert.deepEqual(await store.getBoard(), { project: { name: '', description: '' }, columns: [] });
+    assert.deepEqual(await store.getBoard(), { project: { name: '', description: '', completedCount: 0 }, columns: [] });
   });
 
   test('con sessionStorage bloqueado, las operaciones fallan con un mensaje claro', async () => {
@@ -292,24 +306,23 @@ describe('exportación', () => {
     await store.updateCard(cards.A.id, { title: 'A', description: 'Detalle', priority: 'high', dueDate: '2026-12-01' });
 
     await store.updateProject({ name: 'Mi app', description: 'Breve' });
-    await store.setCardCompleted(cards.B.id, true);
+    await store.completeCard(cards.C.id);
     const exported = rules.toExport(await store.getBoard(), '2026-11-16T10:00:00.000Z');
     assert.deepEqual(exported, {
       app: 'TaskFlow',
       type: 'kanban-board',
       version: 2,
       exportedAt: '2026-11-16T10:00:00.000Z',
-      project: { name: 'Mi app', description: 'Breve' },
+      project: { name: 'Mi app', description: 'Breve', completedTasks: 1 },
       columns: [
         {
           name: 'Por hacer',
           cards: [
-            { title: 'A', description: 'Detalle', priority: 'high', dueDate: '2026-12-01', completed: false },
-            { title: 'B', description: null, priority: 'medium', dueDate: null, completed: true },
-            { title: 'C', description: null, priority: 'medium', dueDate: null, completed: false },
+            { title: 'A', description: 'Detalle', priority: 'high', dueDate: '2026-12-01' },
+            { title: 'B', description: null, priority: 'medium', dueDate: null },
           ],
         },
-        { name: 'En curso', cards: [{ title: 'X', description: null, priority: 'medium', dueDate: null, completed: false }] },
+        { name: 'En curso', cards: [{ title: 'X', description: null, priority: 'medium', dueDate: null }] },
       ],
     });
     assert.doesNotMatch(JSON.stringify(exported), /"id"|columnId|createdAt/);
